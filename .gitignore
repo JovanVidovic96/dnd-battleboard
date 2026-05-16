@@ -38,4 +38,7 @@ battleboard-frontend/dist/
 
 # Environment
 *.env
-application-local.properties
+application-local.propertiesbattleboard-frontend/node_modules/
+battleboard-frontend/dist/
+*.env
+.idea/
