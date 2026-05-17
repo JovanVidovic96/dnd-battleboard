@@ -1,4 +1,4 @@
-package com.dnd.battleboard.user.dto;
+package com.dnd.battleboard.auth.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

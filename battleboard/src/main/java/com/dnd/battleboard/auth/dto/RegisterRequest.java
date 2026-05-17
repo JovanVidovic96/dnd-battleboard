@@ -1,7 +1,8 @@
-package com.dnd.battleboard.user.dto;
+package com.dnd.battleboard.auth.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
-
+@AllArgsConstructor
 @Data
 public class RegisterRequest {
     private String username;

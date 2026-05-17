@@ -1,10 +1,11 @@
 package com.dnd.battleboard.auth;
 
-import ch.qos.logback.core.subst.Token;
+import com.dnd.battleboard.auth.dto.LoginCommand;
+import com.dnd.battleboard.auth.dto.RegisterCommand;
 import com.dnd.battleboard.user.User;
 import com.dnd.battleboard.user.UserRepository;
-import com.dnd.battleboard.user.dto.AuthResponse;
-import com.dnd.battleboard.user.dto.RegisterRequest;
+import com.dnd.battleboard.auth.dto.AuthResponse;
+import com.dnd.battleboard.auth.dto.RegisterRequest;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,19 +20,19 @@ public class AuthService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
 
-    public AuthResponse register (RegisterRequest request) {
-        if(userRepository.existsByUsername(request.getUsername())) {
+    public AuthResponse register (RegisterCommand command) {
+        if(userRepository.existsByUsername(command.getUsername())) {
             throw new RuntimeException("Username already exists");
         }
 
-        if(userRepository.existsByEmail(request.getEmail())) {
+        if(userRepository.existsByEmail(command.getEmail())) {
             throw new RuntimeException("Email already in use");
         }
 
         User user = User.builder()
-                .username(request.getUsername())
-                .email(request.getEmail())
-                .password(bCryptPasswordEncoder.encode(request.getPassword()))
+                .username(command.getUsername())
+                .email(command.getEmail())
+                .password(bCryptPasswordEncoder.encode(command.getPassword()))
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -43,11 +44,11 @@ public class AuthService {
                 .build();
     }
 
-    public AuthResponse logIn (String email, String password) {
-        User user = userRepository.findByEmail(email)
+    public AuthResponse logIn (LoginCommand dto) {
+        User user = userRepository.findByEmail(dto.getEmail())
                 .orElseThrow(() -> new RuntimeException("No account registered with provided email"));
 
-        if (!bCryptPasswordEncoder.matches(password, user.getPassword())) {
+        if (!bCryptPasswordEncoder.matches(dto.getPassword(), user.getPassword())) {
             throw new RuntimeException("Wrong password");
         }
 
