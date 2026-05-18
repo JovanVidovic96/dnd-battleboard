@@ -38,6 +38,7 @@ public class Session extends BaseEntity {
     )
     private List<User> players;
 
+    @Builder.Default
     private boolean active = true;
 
     private LocalDateTime deletedAt = null;

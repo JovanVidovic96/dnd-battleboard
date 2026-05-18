@@ -5,7 +5,6 @@ import com.dnd.battleboard.auth.dto.RegisterCommand;
 import com.dnd.battleboard.user.User;
 import com.dnd.battleboard.user.UserRepository;
 import com.dnd.battleboard.auth.dto.AuthResponse;
-import com.dnd.battleboard.auth.dto.RegisterRequest;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
