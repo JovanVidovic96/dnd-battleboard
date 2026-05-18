@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class CreateSessionCommand {
     private String name;
 }

@@ -38,7 +38,7 @@ public class Session extends BaseEntity {
     )
     private List<User> players;
 
-    private boolean isActive = true;
+    private boolean active = true;
 
     private LocalDateTime deletedAt = null;
 

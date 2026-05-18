@@ -11,5 +11,6 @@ import java.util.UUID;
 public interface SessionRepository extends JpaRepository<Session, UUID> {
     Optional<Session> findByInviteCode(String inviteCode);
     Optional<Session> findByHost(User host);
+    Optional<Session> findByHostAndActive(User host, boolean active);
     List<Session> findByIsActive(boolean isActive);
 }

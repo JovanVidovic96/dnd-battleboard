@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class UpdateSessionRequest {
     private String name;
     private boolean isActive;

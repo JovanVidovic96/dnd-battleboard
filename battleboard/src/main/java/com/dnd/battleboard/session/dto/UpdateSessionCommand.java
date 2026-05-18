@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
-
+@AllArgsConstructor
 public class UpdateSessionCommand {
     private String name;
     private boolean isActive;

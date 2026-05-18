@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class JoinSessionCommand {
     private String inviteCode;
 }
