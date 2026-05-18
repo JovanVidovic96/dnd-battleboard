@@ -25,23 +25,20 @@ public class SessionService {
     private String generateInviteCode () {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
     }
-    public SessionResponse createSession(CreateSessionCommand dto, UUID hostId) {
-        User host = userRepository.findById(hostId)
+    public SessionResponse createSession(CreateSessionCommand dto, String username) {
+        User host = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         String inviteCode = generateInviteCode();
-
         Session session = sessionMapper.toEntity(dto, host, inviteCode);
-
         Session savedSession = sessionRepository.save(session);
-
         return sessionMapper.toResponse(savedSession);
     }
 
-    public SessionResponse joinSession(String inviteCode, UUID playerID){
+    public SessionResponse joinSession(String inviteCode, String username){
         Session activeSession = sessionRepository.findByInviteCode(inviteCode)
                 .orElseThrow(() ->new RuntimeException("Session not found."));
 
-        User player = userRepository.findById(playerID)
+        User player = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Player not found."));
 
         if (activeSession.getPlayers().contains(player)) {
@@ -55,10 +52,10 @@ public class SessionService {
         return sessionMapper.toResponse(savedSession);
     }
 
-    public void leaveSession(UUID sessionId, UUID playerId) {
+    public void leaveSession(UUID sessionId, String username) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found"));
-        User player = userRepository.findById(playerId)
+        User player = userRepository.findByUsername(username)
                         .orElseThrow(() -> new RuntimeException("Player not found"));
         session.getPlayers().remove(player);
         sessionRepository.save(session);
@@ -81,8 +78,8 @@ public class SessionService {
         sessionRepository.save(session);
     }
 
-    public List<SessionResponse> getSessionsByHost(UUID hostId) {
-        User host = userRepository.findById(hostId)
+    public List<SessionResponse> getSessionsByHost(String username) {
+        User host = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Host not found"));
 
         return sessionRepository.findByHost(host)
@@ -91,8 +88,8 @@ public class SessionService {
                 .collect(Collectors.toList());
     }
 
-    public SessionResponse getActiveSessionByHost (UUID hostId) {
-        User host = userRepository.findById(hostId)
+    public SessionResponse getActiveSessionByHost (String username) {
+        User host = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Host not found"));
 
         return sessionRepository.findByHostAndActive(host, true)
