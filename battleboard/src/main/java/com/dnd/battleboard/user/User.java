@@ -10,7 +10,7 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true)
 @Data
 @Entity
-@Table(name="users")
+@Table(name="user")
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

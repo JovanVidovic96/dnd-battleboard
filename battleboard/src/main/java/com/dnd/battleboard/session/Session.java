@@ -16,6 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @Data
+@Table(name = "session")
 public class Session extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

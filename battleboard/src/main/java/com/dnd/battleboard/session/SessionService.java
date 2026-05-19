@@ -6,7 +6,6 @@ import com.dnd.battleboard.session.dto.SessionResponse;
 import com.dnd.battleboard.session.dto.UpdateSessionCommand;
 import com.dnd.battleboard.user.User;
 import com.dnd.battleboard.user.UserRepository;
-import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Builder
 public class SessionService {
     private final UserRepository userRepository;
     private final SessionMapper sessionMapper;
