@@ -60,6 +60,4 @@ public class MapService {
                 .map(mapMapper::toResponse)
                 .collect(Collectors.toList());
     }
-
-
 }
