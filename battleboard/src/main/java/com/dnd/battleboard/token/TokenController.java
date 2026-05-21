@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-    
+
 @RestController
 @RequestMapping("api/tokens")
 @RequiredArgsConstructor
@@ -28,7 +28,7 @@ public class TokenController {
     @PutMapping("/{tokenId}")
     public ResponseEntity<TokenResponse> updateToken(@RequestBody UpdateTokenRequest req,
                                                      @PathVariable UUID tokenId) {
-        UpdateTokenCommand cmd = tokenMapper.toCmd(req, tokenId);
+        UpdateTokenCommand cmd = tokenMapper.toCmd(req, req.getSessionId());
         return ResponseEntity.ok(tokenService.updateToken(cmd, tokenId));
     }
 
