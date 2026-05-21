@@ -1,20 +1,26 @@
-import { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import LoginPage from "./pages/LoginPage";
+import { authService } from "./services/authService";
+import LobbyPage from "./pages/LobbyPage";
 
 function App() {
-  const [status, setStatus] = useState<string>("Učitavanje...");
-
-  useEffect(() => {
-    fetch("http://localhost:8080/api/health")
-      .then((res) => res.json())
-      .then((data) => setStatus(data.status))
-      .catch(() => setStatus("Backend nije dostupan"));
-  }, []);
-
   return (
-    <div>
-      <h1>DnD Battle Board</h1>
-      <p>Backend status: {status}</p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            authService.isLoggedIn() ? (
+              <Navigate to="/lobby" />
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
+        <Route path="/lobby" element={<LobbyPage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
