@@ -7,6 +7,8 @@ import com.dnd.battleboard.token.dto.TokenResponse;
 import com.dnd.battleboard.token.dto.UpdateTokenCommand;
 import com.dnd.battleboard.user.User;
 import com.dnd.battleboard.user.UserRepository;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Builder
 public class TokenService {
     private final UserRepository userRepository;
     private final TokenRepository tokenRepository;
