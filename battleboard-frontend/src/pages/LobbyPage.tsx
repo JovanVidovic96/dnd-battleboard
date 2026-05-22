@@ -78,6 +78,15 @@ function LobbyPage() {
     }
   };
 
+  const handleAddToSession = async (tokenId: string, sessionId: string) => {
+    try {
+      await tokenService.updateToken(tokenId, { sessionId });
+      alert("Token dodat u sesiju!");
+    } catch (err) {
+      console.error("Greška pri dodavanju tokena u sesiju");
+    }
+  };
+
   const handleLogout = () => {
     authService.logout();
     navigate("/login");
@@ -398,6 +407,27 @@ function LobbyPage() {
                       HP: {token.maxHp} · AC: {token.ac} ·{" "}
                       {token.npc ? "NPC" : "PC"}
                     </div>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "6px",
+                      flexDirection: "column",
+                    }}
+                  >
+                    {sessions.map((session) => (
+                      <button
+                        key={session.id}
+                        onClick={() => handleAddToSession(token.id, session.id)}
+                        style={{
+                          ...buttonStyle,
+                          fontSize: "11px",
+                          padding: "4px 10px",
+                        }}
+                      >
+                        + {session.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ))

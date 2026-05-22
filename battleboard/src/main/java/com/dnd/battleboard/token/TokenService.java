@@ -37,16 +37,20 @@ public class TokenService {
     }
 
     public TokenResponse updateToken(UpdateTokenCommand cmd, UUID tokenId) {
-        Session session = cmd.getSessionId() !=null ? sessionRepository.findById(cmd.getSessionId())
-                .orElseThrow(() -> new RuntimeException("Session not found.")) : null;
+        Session session = cmd.getSessionId() != null
+                ? sessionRepository.findById(cmd.getSessionId())
+                .orElseThrow(() -> new RuntimeException("Session not found."))
+                : null;
         Token token = tokenRepository.findById(tokenId)
                 .orElseThrow(() -> new RuntimeException("Token not found."));
-        token.setName(cmd.getName());
-        token.setSession(session);
-        token.setHp(cmd.getHp());
-        token.setMaxHp(cmd.getMaxHp());
-        token.setAc(cmd.getAc());
-        token.setStatuses(cmd.getStatuses());
+
+        if (cmd.getName() != null) token.setName(cmd.getName());
+        if (cmd.getSessionId() != null) token.setSession(session);
+        if (cmd.getHp() != 0) token.setHp(cmd.getHp());
+        if (cmd.getMaxHp() != 0) token.setMaxHp(cmd.getMaxHp());
+        if (cmd.getAc() != 0) token.setAc(cmd.getAc());
+        if (cmd.getStatuses() != null) token.setStatuses(cmd.getStatuses());
+
         tokenRepository.save(token);
         return tokenMapper.toResponse(token);
     }
