@@ -20,6 +20,9 @@ function GamePage() {
   const [activeTool, setActiveTool] = useState<"select" | "move">("select");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragTokenRef = useRef<Token | null>(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
 
   // WebSocket konekcija
   useEffect(() => {
@@ -140,7 +143,7 @@ function GamePage() {
     }
   };
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -154,7 +157,62 @@ function GamePage() {
       return x >= tx && x <= tx + GRID && y >= ty && y <= ty + GRID;
     });
 
-    setSelectedToken(clicked || null);
+    if (clicked) {
+      isDraggingRef.current = true;
+      dragTokenRef.current = clicked;
+      const tx = clicked.x * zoom + pan.x;
+      const ty = clicked.y * zoom + pan.y;
+      dragOffsetRef.current = { x: x - tx, y: y - ty };
+      setSelectedToken(clicked);
+      dragTokenRef.current = clicked;
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDraggingRef.current || !dragTokenRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const GRID = 48;
+
+    const newX =
+      Math.round((x - dragOffsetRef.current.x - pan.x) / (GRID * zoom)) * GRID;
+    const newY =
+      Math.round((y - dragOffsetRef.current.y - pan.y) / (GRID * zoom)) * GRID;
+
+    setTokens((prev) =>
+      prev.map((t) =>
+        t.id === dragTokenRef.current!.id ? { ...t, x: newX, y: newY } : t,
+      ),
+    );
+  };
+
+  const handleMouseUp = async () => {
+    if (!isDraggingRef.current || !dragTokenRef.current) return;
+    isDraggingRef.current = false;
+
+    const token = tokens.find((t) => t.id === dragTokenRef.current!.id);
+    if (!token) return;
+
+    // Sačuvaj u bazi
+    await tokenService.moveToken(token.id, token.x, token.y);
+
+    // WebSocket broadcast
+    if (stompClientRef.current?.connected) {
+      stompClientRef.current.publish({
+        destination: "/app/token/move",
+        body: JSON.stringify({
+          tokenId: token.id,
+          sessionId: sessionId,
+          x: token.x,
+          y: token.y,
+        }),
+      });
+    }
+
+    dragTokenRef.current = null;
   };
 
   return (
@@ -229,7 +287,9 @@ function GamePage() {
         <canvas
           ref={canvasRef}
           style={{ width: "100%", height: "100%", cursor: "crosshair" }}
-          onClick={handleCanvasClick}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
         />
 
         {/* Desni panel - tokeni */}
