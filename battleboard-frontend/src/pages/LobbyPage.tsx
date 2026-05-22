@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "../services/authService";
 import { sessionService } from "../services/sessionService";
+import { tokenService } from "../services/tokenService";
 import type { Session } from "../types";
 
 function LobbyPage() {
@@ -10,6 +11,17 @@ function LobbyPage() {
   const [inviteCode, setInviteCode] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const navigate = useNavigate();
+  const [myTokens, setMyTokens] = useState<Token[]>([]);
+  const [showTokenForm, setShowTokenForm] = useState(false);
+  const [newToken, setNewToken] = useState({
+    name: "",
+    maxHp: 10,
+    ac: 10,
+    isNpc: false,
+    imageUrl: "",
+    width: 1,
+    height: 1,
+  });
 
   const loadSessions = async () => {
     try {
@@ -21,6 +33,7 @@ function LobbyPage() {
   };
   useEffect(() => {
     loadSessions();
+    tokenService.getMyTokens().then(setMyTokens).catch(console.error);
   }, []);
 
   const handleCreateSession = async () => {
@@ -42,6 +55,26 @@ function LobbyPage() {
       navigate(`/game/${session.id}`);
     } catch (err) {
       console.error("Greška pri pridruživanju sesiji");
+    }
+  };
+
+  const handleCreateToken = async () => {
+    if (!newToken.name.trim()) return;
+    try {
+      const created = await tokenService.createToken(newToken);
+      setMyTokens((prev) => [...prev, created]);
+      setShowTokenForm(false);
+      setNewToken({
+        name: "",
+        maxHp: 10,
+        ac: 10,
+        isNpc: false,
+        imageUrl: "",
+        width: 1,
+        height: 1,
+      });
+    } catch (err) {
+      console.error("Greška pri kreiranju tokena");
     }
   };
 
@@ -198,6 +231,178 @@ function LobbyPage() {
               </div>
             ))
           )}
+          {/* Token Library */}
+          <div style={cardStyle}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <h2 style={{ ...sectionTitleStyle, marginBottom: 0, flex: 1 }}>
+                Moji tokeni
+              </h2>
+              <button
+                onClick={() => setShowTokenForm(!showTokenForm)}
+                style={buttonStyle}
+              >
+                + Novi token
+              </button>
+            </div>
+
+            {showTokenForm && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  marginBottom: "16px",
+                  padding: "12px",
+                  background: "#1e1a10",
+                  borderRadius: "4px",
+                  border: "1px solid rgba(201,147,58,0.15)",
+                }}
+              >
+                <input
+                  placeholder="Ime tokena"
+                  value={newToken.name}
+                  onChange={(e) =>
+                    setNewToken((p) => ({ ...p, name: e.target.value }))
+                  }
+                  style={inputStyle}
+                />
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "rgba(244,237,216,0.45)",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Max HP
+                    </div>
+                    <input
+                      type="number"
+                      value={newToken.maxHp}
+                      onChange={(e) =>
+                        setNewToken((p) => ({ ...p, maxHp: +e.target.value }))
+                      }
+                      style={{ ...inputStyle, width: "100%" }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "rgba(244,237,216,0.45)",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      AC
+                    </div>
+                    <input
+                      type="number"
+                      value={newToken.ac}
+                      onChange={(e) =>
+                        setNewToken((p) => ({ ...p, ac: +e.target.value }))
+                      }
+                      style={{ ...inputStyle, width: "100%" }}
+                    />
+                  </div>
+                </div>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "13px",
+                    color: "#f4edd8",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={newToken.isNpc}
+                    onChange={(e) =>
+                      setNewToken((p) => ({ ...p, isNpc: e.target.checked }))
+                    }
+                  />
+                  NPC karakter
+                </label>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={handleCreateToken} style={buttonStyle}>
+                    Kreiraj
+                  </button>
+                  <button
+                    onClick={() => setShowTokenForm(false)}
+                    style={{ ...buttonStyle, color: "#c0392b" }}
+                  >
+                    Otkaži
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {myTokens.length === 0 ? (
+              <p
+                style={{
+                  color: "rgba(244,237,216,0.45)",
+                  fontSize: "14px",
+                  textAlign: "center",
+                  padding: "24px",
+                }}
+              >
+                Nemaš sačuvanih tokena. Kreiraj novi!
+              </p>
+            ) : (
+              myTokens.map((token) => (
+                <div key={token.id} style={sessionRowStyle}>
+                  <div
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: token.npc
+                        ? "rgba(139,26,26,0.3)"
+                        : "rgba(27,77,142,0.3)",
+                      border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: token.npc ? "#c0392b" : "#c9933a",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {token.name[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontFamily: "serif",
+                        fontSize: "14px",
+                        color: "#f5d485",
+                      }}
+                    >
+                      {token.name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "rgba(244,237,216,0.45)",
+                      }}
+                    >
+                      HP: {token.maxHp} · AC: {token.ac} ·{" "}
+                      {token.npc ? "NPC" : "PC"}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
