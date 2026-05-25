@@ -23,6 +23,7 @@ function GamePage() {
   const isDraggingRef = useRef(false);
   const dragTokenRef = useRef<Token | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [hpChange, setHpChange] = useState(0);
 
   // WebSocket konekcija
   useEffect(() => {
@@ -188,6 +189,31 @@ function GamePage() {
       ),
     );
   };
+  const handleHpUpdate = async (amount: number) => {
+    if (!selectedToken) return;
+    const newHp = Math.max(
+      0,
+      Math.min(selectedToken.maxHp, selectedToken.hp + amount),
+    );
+
+    setTokens((prev) =>
+      prev.map((t) => (t.id === selectedToken.id ? { ...t, hp: newHp } : t)),
+    );
+    setSelectedToken((prev) => (prev ? { ...prev, hp: newHp } : null));
+
+    await tokenService.updateToken(selectedToken.id, { hp: newHp });
+
+    if (stompClientRef.current?.connected) {
+      stompClientRef.current.publish({
+        destination: "/app/token/hp",
+        body: JSON.stringify({
+          tokenId: selectedToken.id,
+          sessionId: sessionId,
+          hp: newHp,
+        }),
+      });
+    }
+  };
 
   const handleMouseUp = async () => {
     if (!isDraggingRef.current || !dragTokenRef.current) return;
@@ -299,20 +325,24 @@ function GamePage() {
             borderLeft: "1px solid rgba(201,147,58,0.25)",
             overflow: "auto",
             padding: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
           }}
         >
+          {/* NASLOV */}
           <div
             style={{
               fontFamily: "serif",
               fontSize: "11px",
               color: "rgba(244,237,216,0.45)",
               letterSpacing: "0.1em",
-              marginBottom: "12px",
             }}
           >
             TOKENI U SESIJI
           </div>
 
+          {/* LISTA TOKENA */}
           {tokens.length === 0 ? (
             <p
               style={{
@@ -332,7 +362,6 @@ function GamePage() {
                 style={{
                   padding: "8px 10px",
                   borderRadius: "4px",
-                  marginBottom: "6px",
                   cursor: "pointer",
                   border: `1px solid ${selectedToken?.id === token.id ? "rgba(201,147,58,0.6)" : "rgba(201,147,58,0.15)"}`,
                   background:
@@ -341,6 +370,7 @@ function GamePage() {
                       : "#1e1a10",
                 }}
               >
+                {/* TOKEN ROW */}
                 <div
                   style={{ display: "flex", alignItems: "center", gap: "8px" }}
                 >
@@ -377,6 +407,8 @@ function GamePage() {
                     </div>
                   </div>
                 </div>
+
+                {/* HP BAR */}
                 <div
                   style={{
                     marginTop: "6px",
@@ -395,6 +427,152 @@ function GamePage() {
                     }}
                   />
                 </div>
+
+                {/* PROSIRENE KONTROLE - samo za selektovani token */}
+                {selectedToken?.id === token.id && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      borderTop: "1px solid rgba(201,147,58,0.15)",
+                      paddingTop: "10px",
+                    }}
+                  >
+                    {/* HP KONTROLE */}
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "rgba(244,237,216,0.45)",
+                        fontFamily: "serif",
+                        letterSpacing: "0.08em",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      HP KONTROLE
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "4px",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(-10);
+                        }}
+                        style={quickBtnStyle}
+                      >
+                        -10
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(-5);
+                        }}
+                        style={quickBtnStyle}
+                      >
+                        -5
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(-1);
+                        }}
+                        style={quickBtnStyle}
+                      >
+                        -1
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(1);
+                        }}
+                        style={{
+                          ...quickBtnStyle,
+                          color: "#2d7a3a",
+                          borderColor: "rgba(45,122,58,0.4)",
+                        }}
+                      >
+                        +1
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(5);
+                        }}
+                        style={{
+                          ...quickBtnStyle,
+                          color: "#2d7a3a",
+                          borderColor: "rgba(45,122,58,0.4)",
+                        }}
+                      >
+                        +5
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(10);
+                        }}
+                        style={{
+                          ...quickBtnStyle,
+                          color: "#2d7a3a",
+                          borderColor: "rgba(45,122,58,0.4)",
+                        }}
+                      >
+                        +10
+                      </button>
+                    </div>
+
+                    {/* CUSTOM HP INPUT */}
+                    <div
+                      style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}
+                    >
+                      <input
+                        type="number"
+                        value={hpChange}
+                        onChange={(e) => setHpChange(+e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        placeholder="Vrednost"
+                        style={{
+                          flex: 1,
+                          background: "#0d0a06",
+                          border: "1px solid rgba(201,147,58,0.25)",
+                          borderRadius: "4px",
+                          padding: "4px 6px",
+                          color: "#f4edd8",
+                          fontSize: "12px",
+                          outline: "none",
+                        }}
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(-hpChange);
+                          setHpChange(0);
+                        }}
+                        style={{ ...quickBtnStyle, padding: "4px 8px" }}
+                      >
+                        DMG
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHpUpdate(hpChange);
+                          setHpChange(0);
+                        }}
+                        style={{
+                          ...quickBtnStyle,
+                          padding: "4px 8px",
+                          color: "#2d7a3a",
+                          borderColor: "rgba(45,122,58,0.4)",
+                        }}
+                      >
+                        HEAL
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -552,6 +730,17 @@ const btnStyle: React.CSSProperties = {
   color: "#f5d485",
   fontSize: "12px",
   cursor: "pointer",
+};
+
+const quickBtnStyle: React.CSSProperties = {
+  background: "rgba(139,26,26,0.15)",
+  border: "1px solid rgba(192,57,43,0.3)",
+  borderRadius: "4px",
+  padding: "3px 6px",
+  color: "#c0392b",
+  fontSize: "11px",
+  cursor: "pointer",
+  fontFamily: "serif",
 };
 
 export default GamePage;
