@@ -75,7 +75,7 @@ public class TokenService {
     public List<TokenResponse> getAllByOwner(String username) {
         User owner = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found."));
-        return tokenRepository.findByOwner(owner)
+        return tokenRepository.findByOwnerAndDeletedAtIsNull(owner)
                 .stream()
                 .map(tokenMapper::toResponse)
                 .collect(Collectors.toList());
@@ -84,7 +84,7 @@ public class TokenService {
     public List<TokenResponse> getAllTokensBySession(UUID sessionId) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found."));
-        return  tokenRepository.findBySession(session)
+        return tokenRepository.findBySessionAndDeletedAtIsNull(session)
                 .stream()
                 .map(tokenMapper::toResponse)
                 .collect(Collectors.toList());

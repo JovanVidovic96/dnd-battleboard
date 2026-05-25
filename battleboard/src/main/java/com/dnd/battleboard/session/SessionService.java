@@ -80,18 +80,19 @@ public class SessionService {
         User host = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Host not found"));
 
-        return sessionRepository.findByHost(host)
+        return sessionRepository.findByHostAndDeletedAtIsNull(host)
                 .stream()
                 .map(sessionMapper::toResponse)
                 .collect(Collectors.toList());
     }
 
-    public SessionResponse getActiveSessionByHost (String username) {
+    public List<SessionResponse> getActiveSessionByHost (String username) {
         User host = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Host not found"));
 
         return sessionRepository.findByHostAndActive(host, true)
+                .stream()
                 .map(sessionMapper::toResponse)
-                .orElseThrow(() -> new RuntimeException("No active sessions found"));
+                .collect(Collectors.toList());
     }
 }

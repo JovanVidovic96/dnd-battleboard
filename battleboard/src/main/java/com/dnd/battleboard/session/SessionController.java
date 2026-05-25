@@ -59,7 +59,7 @@ public class SessionController {
     }
 
     @GetMapping("/host/active")
-    public ResponseEntity<SessionResponse> getActiveSessionByHost() {
+    public ResponseEntity<List<SessionResponse>> getActiveSessionByHost() {
         String hostUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         return ResponseEntity.ok(sessionService.getActiveSessionByHost(hostUsername));
     }

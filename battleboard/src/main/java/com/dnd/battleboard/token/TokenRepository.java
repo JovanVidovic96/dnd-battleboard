@@ -12,4 +12,6 @@ public interface TokenRepository extends JpaRepository<Token, UUID> {
     List<Token> findBySession(Session session);
     List<Token> findByOwner (User owner);
     List<Token> findBySessionAndIsNpc (Session session, boolean isNpc);
+    List<Token> findByOwnerAndDeletedAtIsNull(User owner);
+    List<Token> findBySessionAndDeletedAtIsNull(Session session);
 }
