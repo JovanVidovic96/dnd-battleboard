@@ -33,8 +33,8 @@ public class TokenController {
     }
 
     @DeleteMapping("/{tokenId}")
-    public ResponseEntity<Void> deleteToken(@PathVariable UUID tokeId) {
-        tokenService.deleteToken(tokeId);
+    public ResponseEntity<Void> deleteToken(@PathVariable UUID tokenId) {
+        tokenService.deleteToken(tokenId);
         return ResponseEntity.ok().build();
     }
 

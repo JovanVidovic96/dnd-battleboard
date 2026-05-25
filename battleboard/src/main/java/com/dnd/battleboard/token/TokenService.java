@@ -8,7 +8,6 @@ import com.dnd.battleboard.token.dto.UpdateTokenCommand;
 import com.dnd.battleboard.user.User;
 import com.dnd.battleboard.user.UserRepository;
 import lombok.Builder;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +31,7 @@ public class TokenService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Token token = tokenMapper.toEntity(cmd, tokenOwner, null );
+        token.setHp(token.getMaxHp());
         Token savedToken = tokenRepository.save(token);
         return tokenMapper.toResponse(savedToken);
     }
