@@ -25,7 +25,8 @@ public class MapMapper {
                 req.getBackgroundImgUrl(),
                 req.getCellSize(),
                 req.getCellWidth(),
-                req.getCellHeight()
+                req.getCellHeight(),
+                req.getMapData()
         );
     }
 
@@ -51,7 +52,8 @@ public class MapMapper {
                 map.getCellSize(),
                 map.getCellWidth(),
                 map.getCellHeight(),
-                map.isActive()
+                map.isActive(),
+                map.getMapData()
         );
     }
 }

@@ -18,4 +18,6 @@ public class UpdateMapRequest {
     private int cellWidth;
 
     private int cellHeight;
+
+    private String mapData;
 }

@@ -44,6 +44,9 @@ public class Map extends BaseEntity {
     @Column(nullable = false)
     private int cellHeight;
 
+    @Column(columnDefinition = "TEXT")
+    private String mapData;
+
     @Builder.Default
     private boolean active = true;
 

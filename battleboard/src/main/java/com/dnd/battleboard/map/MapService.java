@@ -39,6 +39,7 @@ public class MapService {
         map.setCellSize(dto.getCellSize());
         map.setCellWidth(dto.getCellWidth());
         map.setCellHeight(dto.getCellHeight());
+        if (dto.getMapData() != null) map.setMapData(dto.getMapData());
 
         mapRepository.save(map);
         return mapMapper.toResponse(map);

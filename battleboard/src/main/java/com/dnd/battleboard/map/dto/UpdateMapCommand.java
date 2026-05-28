@@ -22,4 +22,6 @@ public class UpdateMapCommand {
     private int cellWidth;
 
     private int cellHeight;
+
+    private String mapData;
 }

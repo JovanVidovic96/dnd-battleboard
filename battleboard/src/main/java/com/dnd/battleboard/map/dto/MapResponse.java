@@ -30,4 +30,6 @@ public class MapResponse {
     private int cellHeight;
 
     private boolean active;
+
+    private String mapData;
 }
