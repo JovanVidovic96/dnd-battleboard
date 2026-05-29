@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { authService } from "../services/authService";
 import { sessionService } from "../services/sessionService";
 import { tokenService } from "../services/tokenService";
-import type { Session } from "../types";
+import type { Session, Token } from "../types";
 import { mapService } from "../services/mapService";
+import { uploadService } from "../services/uploadService";
+import { toast } from "../utils/toast";
 import type { GameMap } from "../types";
 
 function LobbyPage() {
@@ -39,14 +41,14 @@ function LobbyPage() {
     try {
       const data = await sessionService.getMysessions();
       setSessions(data);
-    } catch (err) {
-      console.error("Greška pri učitavanju sesija");
+    } catch {
+      toast.error("Greška pri učitavanju sesija");
     }
   };
   useEffect(() => {
     loadSessions();
-    tokenService.getMyTokens().then(setMyTokens).catch(console.error);
-    mapService.getMaps().then(setMyMaps).catch(console.error);
+    tokenService.getMyTokens().then(setMyTokens).catch(() => toast.error("Greška pri učitavanju tokena"));
+    mapService.getMaps().then(setMyMaps).catch(() => toast.error("Greška pri učitavanju mapa"));
   }, []);
 
   const handleCreateSession = async () => {
@@ -56,8 +58,8 @@ function LobbyPage() {
       setNewSessionName("");
       setShowCreate(false);
       loadSessions();
-    } catch (err) {
-      console.error("Greška pri kreiranju sesije");
+    } catch {
+      toast.error("Greška pri kreiranju sesije");
     }
   };
 
@@ -66,8 +68,8 @@ function LobbyPage() {
     try {
       const session = await sessionService.joinSession(inviteCode);
       navigate(`/game/${session.id}`);
-    } catch (err) {
-      console.error("Greška pri pridruživanju sesiji");
+    } catch {
+      toast.error("Greška pri pridruživanju sesiji");
     }
   };
 
@@ -86,17 +88,17 @@ function LobbyPage() {
         width: 1,
         height: 1,
       });
-    } catch (err) {
-      console.error("Greška pri kreiranju tokena");
+    } catch {
+      toast.error("Greška pri kreiranju tokena");
     }
   };
 
   const handleAddToSession = async (tokenId: string, sessionId: string) => {
     try {
       await tokenService.updateToken(tokenId, { sessionId });
-      alert("Token dodat u sesiju!");
-    } catch (err) {
-      console.error("Greška pri dodavanju tokena u sesiju");
+      toast.success("Token dodat u sesiju!");
+    } catch {
+      toast.error("Greška pri dodavanju tokena u sesiju");
     }
   };
 
@@ -104,8 +106,8 @@ function LobbyPage() {
     try {
       await tokenService.deleteToken(tokenId);
       setMyTokens((prev) => prev.filter((t) => t.id !== tokenId));
-    } catch (err) {
-      console.error("Greška pri brisanju tokena");
+    } catch {
+      toast.error("Greška pri brisanju tokena");
     }
   };
 
@@ -113,8 +115,8 @@ function LobbyPage() {
     try {
       await sessionService.deleteSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    } catch (err) {
-      console.error("Greška pri brisanju sesije");
+    } catch {
+      toast.error("Greška pri brisanju sesije");
     }
   };
 
@@ -132,8 +134,8 @@ function LobbyPage() {
         cellWidth: 24,
         cellHeight: 16,
       });
-    } catch (err) {
-      console.error("Greška pri kreiranju mape");
+    } catch {
+      toast.error("Greška pri kreiranju mape");
     }
   };
 
@@ -141,8 +143,8 @@ function LobbyPage() {
     try {
       await mapService.deleteMap(mapId);
       setMyMaps((prev) => prev.filter((m) => m.id !== mapId));
-    } catch (err) {
-      console.error("Greška pri brisanju mape");
+    } catch {
+      toast.error("Greška pri brisanju mape");
     }
   };
 
@@ -416,6 +418,39 @@ function LobbyPage() {
                 />
                 NPC karakter
               </label>
+              <div>
+                <div style={{ fontSize: "11px", color: "rgba(244,237,216,0.45)", marginBottom: "4px" }}>
+                  Slika tokena
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  {newToken.imageUrl && (
+                    <img
+                      src={newToken.imageUrl}
+                      alt="preview"
+                      style={{
+                        width: "42px", height: "42px", borderRadius: "50%",
+                        objectFit: "cover", border: "1.5px solid rgba(201,147,58,0.4)",
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const url = await uploadService.uploadImage(file);
+                        setNewToken((p) => ({ ...p, imageUrl: url }));
+                      } catch {
+                        toast.error("Greška pri uploadu slike");
+                      }
+                    }}
+                    style={{ ...inputStyle, padding: "4px 8px", fontSize: "12px", flex: 1 }}
+                  />
+                </div>
+              </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button onClick={handleCreateToken} style={buttonStyle}>
                   Kreiraj
@@ -444,26 +479,38 @@ function LobbyPage() {
           ) : (
             myTokens.map((token) => (
               <div key={token.id} style={sessionRowStyle}>
-                <div
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "50%",
-                    background: token.npc
-                      ? "rgba(139,26,26,0.3)"
-                      : "rgba(27,77,142,0.3)",
-                    border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: token.npc ? "#c0392b" : "#c9933a",
-                    flexShrink: 0,
-                  }}
-                >
-                  {token.name[0].toUpperCase()}
-                </div>
+                {token.imageUrl ? (
+                  <img
+                    src={token.imageUrl}
+                    alt={token.name}
+                    style={{
+                      width: "32px", height: "32px", borderRadius: "50%",
+                      objectFit: "cover", flexShrink: 0,
+                      border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: token.npc
+                        ? "rgba(139,26,26,0.3)"
+                        : "rgba(27,77,142,0.3)",
+                      border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: token.npc ? "#c0392b" : "#c9933a",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {token.name[0].toUpperCase()}
+                  </div>
+                )}
                 <div style={{ flex: 1 }}>
                   <div
                     style={{

@@ -2,13 +2,28 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { tokenService } from "../services/tokenService";
 import { diceService } from "../services/diceService";
-import { authService } from "../services/authService";
 import type { Token, DiceRoll } from "../types";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import { mapService } from '../services/mapService';
 import type { GameMap } from '../types';
 import { sessionService } from '../services/sessionService';
+import { toast } from '../utils/toast';
+
+// Proširen interfejs da podržava sve nove elemente
+export interface MapData {
+  walls: [number, number][];
+  doors: [number, number][];
+  traps: [number, number][];
+  water?: [number, number][];
+  mud?: [number, number][];
+  sand?: [number, number][];
+  fire?: [number, number][];
+  tree?: [number, number][];
+  chest?: [number, number][];
+  table?: [number, number][];
+  chair?: [number, number][];
+}
 
 export interface Session {
   id: string;
@@ -20,6 +35,256 @@ export interface Session {
   activeMapId: string | null;
 }
 
+const INITIAL_MAP_DATA: MapData = {
+  walls: [], doors: [], traps: [],
+  water: [], mud: [], sand: [],
+  fire: [], tree: [], chest: [],
+  table: [], chair: []
+};
+
+// --- POMOĆNE PROCEDURALNE FUNKCIJE ZA CRTANJE TEKSTURA ---
+
+function drawProceduralWall(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = '#3c3d40';
+  ctx.fillRect(x, y, size, size);
+
+  let shadowGrad = ctx.createLinearGradient(x, y, x, y + size);
+  shadowGrad.addColorStop(0, 'rgba(255, 255, 255, 0.05)');
+  shadowGrad.addColorStop(0.2, 'rgba(0, 0, 0, 0)');
+  shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+  ctx.fillStyle = shadowGrad;
+  ctx.fillRect(x, y, size, size);
+
+  ctx.strokeStyle = '#1c1d1f';
+  ctx.lineWidth = Math.max(1, size * 0.04);
+  ctx.strokeRect(x, y, size, size);
+
+  ctx.strokeStyle = '#252628';
+  ctx.lineWidth = Math.max(1, size * 0.02);
+
+  ctx.beginPath();
+  ctx.moveTo(x, y + size / 2);
+  ctx.lineTo(x + size, y + size / 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x + size / 2, y);
+  ctx.lineTo(x + size / 2, y + size / 2);
+  ctx.moveTo(x + size * 0.3, y + size / 2);
+  ctx.lineTo(x + size * 0.3, y + size);
+  ctx.moveTo(x + size * 0.7, y + size / 2);
+  ctx.lineTo(x + size * 0.7, y + size);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.1, y + size * 0.15);
+  ctx.lineTo(x + size * 0.18, y + size * 0.3);
+  ctx.lineTo(x + size * 0.08, y + size * 0.4);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawProceduralDoor(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, isOpen: boolean) {
+  ctx.save();
+
+  if (isOpen) {
+    ctx.fillStyle = 'rgba(20, 15, 10, 0.6)';
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = 'rgba(201, 147, 58, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(x + 2, y + 2, size - 4, size - 4);
+    ctx.setLineDash([]);
+
+    ctx.translate(x, y);
+    ctx.fillStyle = '#5a391a';
+    ctx.fillRect(0, 0, size * 0.2, size * 0.95);
+    ctx.strokeStyle = '#321f0e';
+    ctx.strokeRect(0, 0, size * 0.2, size * 0.95);
+  } else {
+    ctx.fillStyle = '#2d1e10';
+    ctx.fillRect(x, y, size, size);
+
+    const padding = size * 0.08;
+    ctx.fillStyle = '#8b5a2b';
+    ctx.fillRect(x + padding, y + padding, size - padding * 2, size - padding * 2);
+
+    ctx.strokeStyle = '#5c3a1a';
+    ctx.lineWidth = Math.max(1, size * 0.02);
+    const step = (size - padding * 2) / 3;
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x + padding + i * step, y + padding);
+      ctx.lineTo(x + padding + i * step, y + size - padding);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(x + padding, y + size * 0.25, size - padding * 2, size * 0.08);
+    ctx.fillRect(x + padding, y + size * 0.65, size - padding * 2, size * 0.08);
+
+    ctx.fillStyle = '#f5d485';
+    ctx.beginPath();
+    ctx.arc(x + size * 0.75, y + size / 2, size * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#b59342';
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawProceduralTrap(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = '#28292b';
+  ctx.fillRect(x, y, size, size);
+  ctx.strokeStyle = '#151617';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, size, size);
+
+  ctx.strokeStyle = '#3f4145';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + size * 0.15, y + size * 0.15, size * 0.7, size * 0.7);
+
+  ctx.strokeStyle = '#4d1414';
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.15, y + size * 0.15); ctx.lineTo(x + size * 0.05, y + size * 0.05);
+  ctx.moveTo(x + size * 0.85, y + size * 0.15); ctx.lineTo(x + size * 0.95, y + size * 0.05);
+  ctx.moveTo(x + size * 0.15, y + size * 0.85); ctx.lineTo(x + size * 0.05, y + size * 0.95);
+  ctx.moveTo(x + size * 0.85, y + size * 0.85); ctx.lineTo(x + size * 0.95, y + size * 0.95);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(192, 57, 43, 0.85)';
+  ctx.lineWidth = Math.max(2, size * 0.08);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.25, y + size * 0.25);
+  ctx.lineTo(x + size * 0.75, y + size * 0.75);
+  ctx.moveTo(x + size * 0.75, y + size * 0.25);
+  ctx.lineTo(x + size * 0.25, y + size * 0.75);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawProceduralWater(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = '#1d3557';
+  ctx.fillRect(x, y, size, size);
+  ctx.strokeStyle = '#457b9d';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.2, y + size * 0.3);
+  ctx.quadraticCurveTo(x + size * 0.4, y + size * 0.1, x + size * 0.6, y + size * 0.3);
+  ctx.moveTo(x + size * 0.4, y + size * 0.7);
+  ctx.quadraticCurveTo(x + size * 0.6, y + size * 0.5, x + size * 0.8, y + size * 0.7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawProceduralMud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = '#4a3728';
+  ctx.fillRect(x, y, size, size);
+  ctx.fillStyle = '#36281e';
+  ctx.beginPath();
+  ctx.arc(x + size * 0.3, y + size * 0.4, size * 0.15, 0, Math.PI * 2);
+  ctx.arc(x + size * 0.7, y + size * 0.7, size * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawProceduralSand(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = '#e9c46a';
+  ctx.fillRect(x, y, size, size);
+  ctx.fillStyle = '#f4a261';
+  for(let i=0; i<4; i++) {
+    let px = x + ((i * 13 + 5) % 1) * size;
+    let py = y + ((i * 7 + 11) % 1) * size;
+    ctx.fillRect(px, py, Math.max(1, size * 0.04), Math.max(1, size * 0.04));
+  }
+  ctx.restore();
+}
+
+function drawProceduralFire(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  let grad = ctx.createRadialGradient(x+size/2, y+size/2, size*0.1, x+size/2, y+size/2, size*0.4);
+  grad.addColorStop(0, '#ffb703');
+  grad.addColorStop(0.4, '#fb8500');
+  grad.addColorStop(1, 'rgba(211, 47, 47, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, size, size);
+
+  ctx.fillStyle = '#e63946';
+  ctx.beginPath();
+  ctx.moveTo(x + size*0.5, y + size*0.2);
+  ctx.quadraticCurveTo(x + size*0.3, y + size*0.5, x + size*0.35, y + size*0.8);
+  ctx.lineTo(x + size*0.65, y + size*0.8);
+  ctx.quadraticCurveTo(x + size*0.7, y + size*0.5, x + size*0.5, y + size*0.2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawProceduralTree(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.arc(x + size*0.55, y + size*0.55, size * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#2a9d8f';
+  ctx.beginPath();
+  ctx.arc(x + size/2, y + size/2, size * 0.38, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#264653';
+  ctx.beginPath();
+  ctx.arc(x + size/2 - size*0.05, y + size/2 - size*0.05, size * 0.38, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = '#1d3557';
+  ctx.globalAlpha = 0.15;
+  ctx.fillRect(x, y, size, size);
+  ctx.restore();
+}
+
+function drawProceduralChest(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  const pad = size * 0.15;
+  ctx.fillStyle = '#5c3a21';
+  ctx.fillRect(x + pad, y + pad * 1.5, size - pad * 2, size - pad * 3);
+  ctx.strokeStyle = '#d4af37';
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  ctx.strokeRect(x + pad, y + pad * 1.5, size - pad * 2, size - pad * 3);
+  ctx.fillStyle = '#b58900';
+  ctx.fillRect(x + size/2 - size*0.06, y + size/2 - size*0.06, size*0.12, size*0.12);
+  ctx.restore();
+}
+
+function drawProceduralTable(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  const pad = size * 0.1;
+  ctx.fillStyle = '#8b5a2b';
+  ctx.fillRect(x + pad, y + pad, size - pad * 2, size - pad * 2);
+  ctx.strokeStyle = '#5c3a1a';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + pad, y + pad, size - pad * 2, size - pad * 2);
+  ctx.restore();
+}
+
+function drawProceduralChair(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.fillStyle = '#a0522d';
+  ctx.fillRect(x + size * 0.25, y + size * 0.25, size * 0.5, size * 0.5);
+  ctx.fillStyle = '#5c3a1a';
+  ctx.fillRect(x + size * 0.25, y + size * 0.21, size * 0.5, size * 0.08);
+  ctx.restore();
+}
+
+const tokenImageCache = new Map<string, HTMLImageElement>();
+
 function GamePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -30,25 +295,36 @@ function GamePage() {
   const [diceHistory, setDiceHistory] = useState<DiceRoll[]>([]);
   const [formula, setFormula] = useState("1d20");
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
-  const [activeTool, setActiveTool] = useState<"select" | "move">("select");
+  const [activeTool] = useState<"select" | "move">("select");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
   const dragTokenRef = useRef<Token | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const panOriginRef = useRef({ x: 0, y: 0 });
+  const [canvasCursor, setCanvasCursor] = useState<string>("grab");
   const [hpChange, setHpChange] = useState(0);
+  const [initiativeInput, setInitiativeInput] = useState(0);
+  const [currentTurnIdx, setCurrentTurnIdx] = useState(-1);
   const [showMapModal, setShowMapModal] = useState(false);
   const [availableMaps, setAvailableMaps] = useState<GameMap[]>([]);
   const [activeMapData, setActiveMapData] = useState<MapData | null>(null);
   const [activeMap, setActiveMap] = useState<GameMap | null>(null);
-  const BIOME_COLORS: Record<string, { base: string; alt: string; grid: string }> = {
-    CAVE:     { base: '#1a1510', alt: '#12100a', grid: 'rgba(201,147,58,0.12)' },
-    FOREST:   { base: '#0d1a0d', alt: '#0a1408', grid: 'rgba(45,122,58,0.2)' },
-    OCEAN:    { base: '#080d1a', alt: '#060a14', grid: 'rgba(42,96,128,0.2)' },
-    DESERT:   { base: '#1a1508', alt: '#141006', grid: 'rgba(210,180,80,0.2)' },
-    MOUNTAIN: { base: '#121212', alt: '#0d0d0d', grid: 'rgba(180,180,180,0.15)' },
-    CITY:     { base: '#0f0f14', alt: '#0a0a10', grid: 'rgba(100,120,200,0.15)' },
-    DUNGEON:  { base: '#100a0a', alt: '#0a0606', grid: 'rgba(139,26,26,0.2)' },
+
+  const [openedDoors, setOpenedDoors] = useState<Record<string, boolean>>({});
+  const [imageVersion, setImageVersion] = useState(0);
+
+  // Dodato detail polje za iscrtavanje bioma u sesiji
+  const BIOME_COLORS: Record<string, { base: string; alt: string; grid: string; detail: string }> = {
+    CAVE:     { base: '#1a1510', alt: '#12100a', grid: 'rgba(201,147,58,0.12)', detail: '#261f18' },
+    FOREST:   { base: '#0d1a0d', alt: '#0a1408', grid: 'rgba(45,122,58,0.2)',   detail: '#162e16' },
+    OCEAN:    { base: '#080d1a', alt: '#060a14', grid: 'rgba(42,96,128,0.2)',  detail: '#101b33' },
+    DESERT:   { base: '#1a1508', alt: '#141006', grid: 'rgba(210,180,80,0.2)',  detail: '#29210d' },
+    MOUNTAIN: { base: '#121212', alt: '#0d0d0d', grid: 'rgba(180,180,180,0.15)', detail: '#1f1f1f' },
+    CITY:     { base: '#0f0f14', alt: '#0a0a10', grid: 'rgba(100,120,200,0.15)', detail: '#22222b' },
+    DUNGEON:  { base: '#100a0a', alt: '#0a0606', grid: 'rgba(139,26,26,0.2)',   detail: '#1f1414' },
   };
 
   // WebSocket konekcija
@@ -58,13 +334,11 @@ function GamePage() {
     const client = new Client({
       webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
       onConnect: () => {
-        console.log("WebSocket connected");
 
         client.subscribe(`/topic/session/${sessionId}`, (message) => {
           const data = JSON.parse(message.body);
 
           if (data.x !== undefined && data.y !== undefined) {
-            // Token move event
             setTokens((prev) =>
               prev.map((t) =>
                 t.id === data.tokenId ? { ...t, x: data.x, y: data.y } : t,
@@ -83,20 +357,24 @@ function GamePage() {
     };
   }, [sessionId]);
 
+  useEffect(() => {
+    setInitiativeInput(selectedToken?.initiative ?? 0);
+  }, [selectedToken?.id]);
+
   // Učitaj tokene
   useEffect(() => {
     if (!sessionId) return;
     tokenService
       .getTokensBySession(sessionId)
       .then(setTokens)
-      .catch(console.error);
+      .catch(() => toast.error("Greška pri učitavanju tokena"));
     diceService
       .getPublicHistory(sessionId)
       .then(setDiceHistory)
-      .catch(console.error);
+      .catch(() => toast.error("Greška pri učitavanju istorije bacanja"));
   }, [sessionId]);
 
-  // Canvas rendering
+  // Canvas rendering sa kompletnim slojevima
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -106,31 +384,59 @@ function GamePage() {
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
 
-    // Background
+    // Pozadina
     ctx.fillStyle = "#0d0a06";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    // Biom tekstura
+
+    const GRID = 48 * zoom;
+
+    // SLOJ 1: Biom napredna tekstura
     if (activeMap) {
       const colors = BIOME_COLORS[activeMap.biome] || BIOME_COLORS.CAVE;
-      const GS = 48 * zoom;
       for (let r = 0; r < activeMap.cellHeight; r++) {
         for (let c = 0; c < activeMap.cellWidth; c++) {
-          const x = c * GS + pan.x;
-          const y = r * GS + pan.y;
+          const x = c * GRID + pan.x;
+          const y = r * GRID + pan.y;
           const seed = (r * 7 + c * 13) % 5;
           ctx.fillStyle = seed < 2 ? colors.alt : colors.base;
-          ctx.fillRect(x, y, GS, GS);
+          ctx.fillRect(x, y, GRID, GRID);
+
+          // Renderovanje unutrašnjih detalja teksture bioma
+          ctx.strokeStyle = colors.detail;
+          ctx.lineWidth = 1;
           if (seed === 0) {
-            ctx.fillStyle = 'rgba(0,0,0,0.08)';
-            ctx.fillRect(x + 2, y + 2, GS - 4, GS - 4);
+            ctx.strokeRect(x + GRID * 0.1, y + GRID * 0.1, GRID * 0.8, GRID * 0.8);
+          } else if (seed === 3) {
+            ctx.beginPath();
+            ctx.moveTo(x, y); ctx.lineTo(x + GRID * 0.2, y + GRID * 0.2);
+            ctx.moveTo(x + GRID, y + GRID); ctx.lineTo(x + GRID * 0.8, y + GRID * 0.8);
+            ctx.stroke();
           }
         }
       }
     }
 
-    // Grid
-    const GRID = 48 * zoom;
-    ctx.strokeStyle = "rgba(201,147,58,0.15)";
+    // SLOJ 2: Elementi podloge (Voda, Blato, Pesak)
+    if (activeMapData) {
+      if (Array.isArray(activeMapData.water)) {
+        activeMapData.water.forEach(([c, r]) => {
+          drawProceduralWater(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+      if (Array.isArray(activeMapData.mud)) {
+        activeMapData.mud.forEach(([c, r]) => {
+          drawProceduralMud(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+      if (Array.isArray(activeMapData.sand)) {
+        activeMapData.sand.forEach(([c, r]) => {
+          drawProceduralSand(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+    }
+
+    // Mreža (Grid) preko podloge
+    ctx.strokeStyle = activeMap ? (BIOME_COLORS[activeMap.biome]?.grid || "rgba(201,147,58,0.15)") : "rgba(201,147,58,0.15)";
     ctx.lineWidth = 0.5;
 
     for (let x = pan.x % GRID; x < canvas.width; x += GRID) {
@@ -145,86 +451,132 @@ function GamePage() {
       ctx.lineTo(canvas.width, y);
       ctx.stroke();
     }
-    // Biom pozadina ako ima aktivna mapa
-    if (activeMapData) {
-      // Walls
-      activeMapData.walls.forEach(([c, r]) => {
-        const x = c * GRID * zoom + pan.x;
-        const y = r * GRID * zoom + pan.y;
-        const size = GRID * zoom;
-        ctx.fillStyle = 'rgba(60,40,20,0.95)';
-        ctx.fillRect(x, y, size, size);
-        ctx.strokeStyle = 'rgba(100,70,30,0.8)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
-      });
 
-      // Doors
-      activeMapData.doors.forEach(([c, r]) => {
-        const x = c * GRID * zoom + pan.x;
-        const y = r * GRID * zoom + pan.y;
-        const size = GRID * zoom;
-        ctx.fillStyle = 'rgba(139,90,43,0.7)';
-        ctx.fillRect(x + size * 0.1, y + size * 0.2, size * 0.8, size * 0.6);
-        ctx.strokeStyle = '#8b5a2b';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x + size * 0.1, y + size * 0.2, size * 0.8, size * 0.6);
-        ctx.fillStyle = '#f5d485';
-        ctx.font = `bold ${Math.floor(size * 0.4)}px serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('D', x + size / 2, y + size / 2);
-      });
-
-      // Traps
+    // SLOJ 3: Zamke
+    if (activeMapData && Array.isArray(activeMapData.traps)) {
       activeMapData.traps.forEach(([c, r]) => {
-        const x = c * GRID * zoom + pan.x;
-        const y = r * GRID * zoom + pan.y;
-        const size = GRID * zoom;
-        ctx.fillStyle = '#c0392b';
-        ctx.font = `bold ${Math.floor(size * 0.5)}px serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('✕', x + size / 2, y + size / 2);
+        drawProceduralTrap(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
       });
     }
-    // Tokeni
-    tokens.forEach((token) => {
-      const tx = token.x * zoom + pan.x;
-      const ty = token.y * zoom + pan.y;
-      const size = 48 * zoom;
 
-      // Token circle
-      ctx.beginPath();
-      ctx.arc(tx + size / 2, ty + size / 2, size / 2 - 2, 0, Math.PI * 2);
-      ctx.fillStyle = token.npc ? "#1a0808" : "#080f1a";
-      ctx.fill();
-      ctx.strokeStyle = token.npc ? "#8b1a1a" : "#1b4d8e";
-      ctx.lineWidth = selectedToken?.id === token.id ? 3 : 1.5;
-      ctx.stroke();
+    // SLOJ 4: Zidovi i Vrata
+    if (activeMapData) {
+      if (Array.isArray(activeMapData.walls)) {
+        activeMapData.walls.forEach(([c, r]) => {
+          drawProceduralWall(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+      if (Array.isArray(activeMapData.doors)) {
+        activeMapData.doors.forEach(([c, r]) => {
+          const isOpen = !!openedDoors[`${c},${r}`];
+          drawProceduralDoor(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID, isOpen);
+        });
+      }
+    }
 
-      // Token inicijal
-      ctx.fillStyle = token.npc ? "#c0392b" : "#c9933a";
-      ctx.font = `bold ${Math.floor(size * 0.35)}px serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(token.name[0].toUpperCase(), tx + size / 2, ty + size / 2);
+    // SLOJ 5: Nameštaj (Stolovi, Stolice, Kovčezi)
+    if (activeMapData) {
+      if (Array.isArray(activeMapData.table)) {
+        activeMapData.table.forEach(([c, r]) => {
+          drawProceduralTable(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+      if (Array.isArray(activeMapData.chair)) {
+        activeMapData.chair.forEach(([c, r]) => {
+          drawProceduralChair(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+      if (Array.isArray(activeMapData.chest)) {
+        activeMapData.chest.forEach(([c, r]) => {
+          drawProceduralChest(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+    }
 
-      // HP bar
-      const hpRatio = token.hp / token.maxHp;
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(tx + 2, ty + size - 6, size - 4, 4);
-      ctx.fillStyle =
-        hpRatio > 0.5 ? "#2d7a3a" : hpRatio > 0.25 ? "#c9933a" : "#8b1a1a";
-      ctx.fillRect(tx + 2, ty + size - 6, (size - 4) * Math.max(0, hpRatio), 4);
-    });
-  }, [tokens, zoom, pan, selectedToken, activeMapData, activeMap]);
+    // SLOJ 6: Drveće i Vatra
+    if (activeMapData) {
+      if (Array.isArray(activeMapData.fire)) {
+        activeMapData.fire.forEach(([c, r]) => {
+          drawProceduralFire(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+      if (Array.isArray(activeMapData.tree)) {
+        activeMapData.tree.forEach(([c, r]) => {
+          drawProceduralTree(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
+        });
+      }
+    }
+
+    // SLOJ 7: Tokeni i interfejs selekcije
+    if (Array.isArray(tokens)) {
+      tokens.forEach((token) => {
+        const tx = token.x * zoom + pan.x;
+        const ty = token.y * zoom + pan.y;
+        const size = 48 * zoom;
+        const cx = tx + size / 2;
+        const cy = ty + size / 2;
+        const r = size / 2 - 2;
+
+        // Circle background
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = token.npc ? "#1a0808" : "#080f1a";
+        ctx.fill();
+
+        // Image or initial letter
+        const cachedImg = token.imageUrl ? tokenImageCache.get(token.imageUrl) : undefined;
+        const imgReady = !!(cachedImg?.complete && cachedImg.naturalWidth > 0);
+
+        if (token.imageUrl && !cachedImg) {
+          const img = new Image();
+          img.src = token.imageUrl;
+          img.onload = () => {
+            tokenImageCache.set(token.imageUrl, img);
+            setImageVersion((v) => v + 1);
+          };
+          tokenImageCache.set(token.imageUrl, img);
+        }
+
+        if (imgReady && cachedImg) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(cachedImg, tx + 2, ty + 2, size - 4, size - 4);
+          ctx.restore();
+        } else if (token.name && token.name.length > 0) {
+          ctx.fillStyle = token.npc ? "#c0392b" : "#c9933a";
+          ctx.font = `bold ${Math.floor(size * 0.35)}px serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(token.name[0].toUpperCase(), cx, cy);
+        }
+
+        // Border (drawn after image so it's on top)
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = token.npc ? "#8b1a1a" : "#1b4d8e";
+        ctx.lineWidth = selectedToken?.id === token.id ? 3 : 1.5;
+        ctx.stroke();
+
+        if (token.maxHp > 0) {
+          const hpRatio = token.hp / token.maxHp;
+          ctx.fillStyle = "rgba(0,0,0,0.5)";
+          ctx.fillRect(tx + 2, ty + size - 6, size - 4, 4);
+          ctx.fillStyle = hpRatio > 0.5 ? "#2d7a3a" : hpRatio > 0.25 ? "#c9933a" : "#8b1a1a";
+          ctx.fillRect(tx + 2, ty + size - 6, (size - 4) * Math.max(0, hpRatio), 4);
+        }
+      });
+    }
+  }, [tokens, zoom, pan, selectedToken, activeMapData, activeMap, openedDoors, imageVersion]);
 
   const handleRoll = async () => {
     if (!sessionId) return;
     try {
       const result = await diceService.roll(sessionId, formula);
       setDiceHistory((prev) => [result, ...prev.slice(0, 19)]);
-    } catch (err) {
-      console.error("Greška pri bacanju");
+    } catch {
+      toast.error("Greška pri bacanju kockice");
     }
   };
 
@@ -234,23 +586,43 @@ function GamePage() {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const GRID = 48 * zoom;
+    const GRID_SIZE = 48 * zoom;
 
-    const clicked = tokens.find((t) => {
+    const clickedToken = tokens.find((t) => {
       const tx = t.x * zoom + pan.x;
       const ty = t.y * zoom + pan.y;
-      return x >= tx && x <= tx + GRID && y >= ty && y <= ty + GRID;
+      return x >= tx && x <= tx + GRID_SIZE && y >= ty && y <= ty + GRID_SIZE;
     });
 
-    if (clicked) {
+    if (clickedToken) {
       isDraggingRef.current = true;
-      dragTokenRef.current = clicked;
-      const tx = clicked.x * zoom + pan.x;
-      const ty = clicked.y * zoom + pan.y;
+      dragTokenRef.current = clickedToken;
+      const tx = clickedToken.x * zoom + pan.x;
+      const ty = clickedToken.y * zoom + pan.y;
       dragOffsetRef.current = { x: x - tx, y: y - ty };
-      setSelectedToken(clicked);
-      dragTokenRef.current = clicked;
+      setSelectedToken(clickedToken);
+      return;
     }
+
+    if (activeTool === "select" && activeMapData && Array.isArray(activeMapData.doors)) {
+      const c = Math.floor((x - pan.x) / GRID_SIZE);
+      const r = Math.floor((y - pan.y) / GRID_SIZE);
+
+      const clickedDoor = activeMapData.doors.find(([dc, dr]) => dc === c && dr === r);
+      if (clickedDoor) {
+        const key = `${c},${r}`;
+        setOpenedDoors(prev => ({
+          ...prev,
+          [key]: !prev[key]
+        }));
+        return;
+      }
+    }
+
+    isPanningRef.current = true;
+    panStartRef.current = { x: e.clientX, y: e.clientY };
+    panOriginRef.current = { ...pan };
+    setCanvasCursor("grabbing");
   };
 
   const handleLoadMap = async (mapId: string) => {
@@ -259,12 +631,26 @@ function GamePage() {
       await sessionService.setActiveMap(sessionId, mapId);
       const map = await mapService.getMap(mapId);
       setActiveMap(map);
-      if (map.mapData) {
-        setActiveMapData(JSON.parse(map.mapData));
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const zoomX = canvas.offsetWidth / (map.cellWidth * 48);
+        const zoomY = canvas.offsetHeight / (map.cellHeight * 48);
+        const fitZoom = Math.min(zoomX, zoomY) * 0.95;
+        setZoom(fitZoom);
+        setPan({
+          x: (canvas.offsetWidth - map.cellWidth * 48 * fitZoom) / 2,
+          y: (canvas.offsetHeight - map.cellHeight * 48 * fitZoom) / 2,
+        });
       }
+      setActiveMapData(
+        map.mapData
+          ? { ...INITIAL_MAP_DATA, ...JSON.parse(map.mapData) }
+          : INITIAL_MAP_DATA
+      );
+      setOpenedDoors({});
       setShowMapModal(false);
-    } catch (err) {
-      console.error('Greška pri učitavanju mape', err);
+    } catch {
+      toast.error("Greška pri učitavanju mape");
     }
   };
 
@@ -275,18 +661,22 @@ function GamePage() {
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isPanningRef.current) {
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      setPan({ x: panOriginRef.current.x + dx, y: panOriginRef.current.y + dy });
+      return;
+    }
     if (!isDraggingRef.current || !dragTokenRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const GRID = 48;
+    const GRID_SIZE = 48;
 
-    const newX =
-      Math.round((x - dragOffsetRef.current.x - pan.x) / (GRID * zoom)) * GRID;
-    const newY =
-      Math.round((y - dragOffsetRef.current.y - pan.y) / (GRID * zoom)) * GRID;
+    const newX = Math.round((x - dragOffsetRef.current.x - pan.x) / (GRID_SIZE * zoom)) * GRID_SIZE;
+    const newY = Math.round((y - dragOffsetRef.current.y - pan.y) / (GRID_SIZE * zoom)) * GRID_SIZE;
 
     setTokens((prev) =>
       prev.map((t) =>
@@ -294,53 +684,71 @@ function GamePage() {
       ),
     );
   };
+
+  const handleInitiativeSet = async (value: number) => {
+    if (!selectedToken) return;
+    setTokens((prev) => prev.map((t) => t.id === selectedToken.id ? { ...t, initiative: value } : t));
+    setSelectedToken((prev) => prev ? { ...prev, initiative: value } : null);
+    try {
+      await tokenService.updateToken(selectedToken.id, { initiative: value });
+    } catch {
+      toast.error("Greška pri postavljanju inicijative");
+    }
+  };
+
   const handleHpUpdate = async (amount: number) => {
     if (!selectedToken) return;
-    const newHp = Math.max(
-      0,
-      Math.min(selectedToken.maxHp, selectedToken.hp + amount),
-    );
+    const newHp = Math.max(0, Math.min(selectedToken.maxHp, selectedToken.hp + amount));
 
     setTokens((prev) =>
       prev.map((t) => (t.id === selectedToken.id ? { ...t, hp: newHp } : t)),
     );
     setSelectedToken((prev) => (prev ? { ...prev, hp: newHp } : null));
 
-    await tokenService.updateToken(selectedToken.id, { hp: newHp });
-
-    if (stompClientRef.current?.connected) {
-      stompClientRef.current.publish({
-        destination: "/app/token/hp",
-        body: JSON.stringify({
-          tokenId: selectedToken.id,
-          sessionId: sessionId,
-          hp: newHp,
-        }),
-      });
+    try {
+      await tokenService.updateToken(selectedToken.id, { hp: newHp });
+      if (stompClientRef.current?.connected) {
+        stompClientRef.current.publish({
+          destination: "/app/token/hp",
+          body: JSON.stringify({
+            tokenId: selectedToken.id,
+            sessionId: sessionId,
+            hp: newHp,
+          }),
+        });
+      }
+    } catch {
+      toast.error("Greška pri ažuriranju HP-a");
     }
   };
 
   const handleMouseUp = async () => {
+    if (isPanningRef.current) {
+      isPanningRef.current = false;
+      setCanvasCursor("grab");
+      return;
+    }
     if (!isDraggingRef.current || !dragTokenRef.current) return;
     isDraggingRef.current = false;
 
     const token = tokens.find((t) => t.id === dragTokenRef.current!.id);
     if (!token) return;
 
-    // Sačuvaj u bazi
-    await tokenService.moveToken(token.id, token.x, token.y);
-
-    // WebSocket broadcast
-    if (stompClientRef.current?.connected) {
-      stompClientRef.current.publish({
-        destination: "/app/token/move",
-        body: JSON.stringify({
-          tokenId: token.id,
-          sessionId: sessionId,
-          x: token.x,
-          y: token.y,
-        }),
-      });
+    try {
+      await tokenService.moveToken(token.id, token.x, token.y);
+      if (stompClientRef.current?.connected) {
+        stompClientRef.current.publish({
+          destination: "/app/token/move",
+          body: JSON.stringify({
+            tokenId: token.id,
+            sessionId: sessionId,
+            x: token.x,
+            y: token.y,
+          }),
+        });
+      }
+    } catch {
+      toast.error("Greška pri pomjeranju tokena");
     }
 
     dragTokenRef.current = null;
@@ -384,7 +792,6 @@ function GamePage() {
             onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
             style={btnStyle}
           >
-
             +
           </button>
           <button onClick={handleOpenMapModal} style={btnStyle}>🗺 Mapa</button>
@@ -419,7 +826,7 @@ function GamePage() {
         {/* Canvas */}
         <canvas
           ref={canvasRef}
-          style={{ width: "100%", height: "100%", cursor: "crosshair" }}
+          style={{ width: "100%", height: "100%", cursor: canvasCursor }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -437,7 +844,42 @@ function GamePage() {
             gap: "8px",
           }}
         >
-          {/* NASLOV */}
+          {tokens.some((t) => t.initiative > 0) && (
+            <>
+              <div style={{ fontFamily: "serif", fontSize: "11px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em" }}>
+                INICIJATIVA
+              </div>
+              {[...tokens]
+                .filter((t) => t.initiative > 0)
+                .sort((a, b) => b.initiative - a.initiative)
+                .map((token, idx) => (
+                  <div
+                    key={token.id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      padding: "4px 8px", borderRadius: "3px",
+                      background: idx === currentTurnIdx ? "rgba(201,147,58,0.12)" : "transparent",
+                      border: `1px solid ${idx === currentTurnIdx ? "rgba(201,147,58,0.5)" : "rgba(201,147,58,0.08)"}`,
+                    }}
+                  >
+                    <span style={{ fontSize: "10px", color: "rgba(244,237,216,0.35)", width: "14px" }}>{idx + 1}.</span>
+                    <span style={{ flex: 1, fontSize: "12px", color: idx === currentTurnIdx ? "#f5d485" : "#f4edd8" }}>{token.name}</span>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#c9933a" }}>{token.initiative}</span>
+                  </div>
+                ))}
+              <button
+                onClick={() => setCurrentTurnIdx((prev) => {
+                  const count = tokens.filter((t) => t.initiative > 0).length;
+                  return prev >= count - 1 ? 0 : prev + 1;
+                })}
+                style={{ ...quickBtnStyle, padding: "4px", color: "#c9933a", borderColor: "rgba(201,147,58,0.4)", width: "100%" }}
+              >
+                Sledeći →
+              </button>
+              <div style={{ borderTop: "1px solid rgba(201,147,58,0.15)" }} />
+            </>
+          )}
+
           <div
             style={{
               fontFamily: "serif",
@@ -449,7 +891,6 @@ function GamePage() {
             TOKENI U SESIJI
           </div>
 
-          {/* LISTA TOKENA */}
           {tokens.length === 0 ? (
             <p
               style={{
@@ -477,29 +918,40 @@ function GamePage() {
                       : "#1e1a10",
                 }}
               >
-                {/* TOKEN ROW */}
                 <div
                   style={{ display: "flex", alignItems: "center", gap: "8px" }}
                 >
-                  <div
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      borderRadius: "50%",
-                      background: token.npc
-                        ? "rgba(139,26,26,0.3)"
-                        : "rgba(27,77,142,0.3)",
-                      border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      color: token.npc ? "#c0392b" : "#c9933a",
-                    }}
-                  >
-                    {token.name[0].toUpperCase()}
-                  </div>
+                  {token.imageUrl ? (
+                    <img
+                      src={token.imageUrl}
+                      alt={token.name}
+                      style={{
+                        width: "28px", height: "28px", borderRadius: "50%",
+                        objectFit: "cover", flexShrink: 0,
+                        border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "50%",
+                        background: token.npc
+                          ? "rgba(139,26,26,0.3)"
+                          : "rgba(27,77,142,0.3)",
+                        border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        color: token.npc ? "#c0392b" : "#c9933a",
+                      }}
+                    >
+                      {token.name ? token.name[0].toUpperCase() : '?'}
+                    </div>
+                  )}
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "13px", color: "#f4edd8" }}>
                       {token.name}
@@ -515,7 +967,6 @@ function GamePage() {
                   </div>
                 </div>
 
-                {/* HP BAR */}
                 <div
                   style={{
                     marginTop: "6px",
@@ -535,7 +986,6 @@ function GamePage() {
                   />
                 </div>
 
-                {/* PROSIRENE KONTROLE - samo za selektovani token */}
                 {selectedToken?.id === token.id && (
                   <div
                     style={{
@@ -544,7 +994,6 @@ function GamePage() {
                       paddingTop: "10px",
                     }}
                   >
-                    {/* HP KONTROLE */}
                     <div
                       style={{
                         fontSize: "10px",
@@ -631,7 +1080,6 @@ function GamePage() {
                       </button>
                     </div>
 
-                    {/* CUSTOM HP INPUT */}
                     <div
                       style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}
                     >
@@ -676,6 +1124,47 @@ function GamePage() {
                         }}
                       >
                         HEAL
+                      </button>
+                    </div>
+
+                    <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
+                      <div style={{ fontSize: "10px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "6px" }}>
+                        INICIJATIVA
+                      </div>
+                      <div style={{ display: "flex", gap: "4px" }}>
+                        <input
+                          type="number"
+                          value={initiativeInput}
+                          onChange={(e) => setInitiativeInput(+e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          min={0}
+                          max={30}
+                          style={{ flex: 1, background: "#0d0a06", border: "1px solid rgba(201,147,58,0.25)", borderRadius: "4px", padding: "4px 6px", color: "#f4edd8", fontSize: "12px", outline: "none" }}
+                        />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleInitiativeSet(initiativeInput); }}
+                          style={{ ...quickBtnStyle, padding: "4px 10px", color: "#c9933a", borderColor: "rgba(201,147,58,0.4)" }}
+                        >
+                          Postavi
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await tokenService.removeFromSession(token.id);
+                            setTokens((prev) => prev.filter((t) => t.id !== token.id));
+                            setSelectedToken(null);
+                          } catch {
+                            toast.error("Greška pri uklanjanju tokena iz sesije");
+                          }
+                        }}
+                        style={{ ...quickBtnStyle, width: "100%", padding: "5px", color: "#c0392b", borderColor: "rgba(192,57,43,0.4)" }}
+                      >
+                        Ukloni iz sesije
                       </button>
                     </div>
                   </div>
@@ -740,7 +1229,7 @@ function GamePage() {
                   marginLeft: "6px",
                 }}
               >
-                [{roll.rolls.join(", ")}]
+                [{roll.rolls ? roll.rolls.join(", ") : ""}]
               </span>
             </div>
           ))}

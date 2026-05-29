@@ -23,4 +23,6 @@ public class UpdateTokenCommand {
     private int ac;
 
     private List<String> statuses;
+
+    private int initiative;
 }

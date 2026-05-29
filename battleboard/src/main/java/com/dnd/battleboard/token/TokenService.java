@@ -50,6 +50,7 @@ public class TokenService {
         if (cmd.getMaxHp() != 0) token.setMaxHp(cmd.getMaxHp());
         if (cmd.getAc() != 0) token.setAc(cmd.getAc());
         if (cmd.getStatuses() != null) token.setStatuses(cmd.getStatuses());
+        if (cmd.getInitiative() != 0) token.setInitiative(cmd.getInitiative());
 
         tokenRepository.save(token);
         return tokenMapper.toResponse(token);
@@ -60,6 +61,13 @@ public class TokenService {
                 .orElseThrow(() -> new RuntimeException("Token not found"));
         token.setDeletedAt(LocalDateTime.now());
         token.setActive(false);
+        tokenRepository.save(token);
+    }
+
+    public void removeFromSession(UUID tokenId) {
+        Token token = tokenRepository.findById(tokenId)
+                .orElseThrow(() -> new RuntimeException("Token not found"));
+        token.setSession(null);
         tokenRepository.save(token);
     }
 

@@ -4,10 +4,12 @@ import { authService } from "./services/authService";
 import LobbyPage from "./pages/LobbyPage";
 import GamePage from "./pages/GamePage";
 import MapEditorPage from "./pages/MapEditorPage";
+import { ToastContainer } from "./components/ToastContainer";
 
 function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route

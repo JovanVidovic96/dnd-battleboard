@@ -21,4 +21,6 @@ public class UpdateTokenRequest {
     private int ac;
 
     private List<String> statuses;
+
+    private int initiative;
 }

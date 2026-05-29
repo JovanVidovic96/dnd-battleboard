@@ -31,6 +31,7 @@ public class TokenMapper {
                 .maxHp(req.getMaxHp())
                 .ac(req.getAc())
                 .statuses(req.getStatuses())
+                .initiative(req.getInitiative())
                 .build();
     }
 

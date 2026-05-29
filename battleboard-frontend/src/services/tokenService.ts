@@ -31,12 +31,17 @@ export const tokenService = {
       hp?: number;
       maxHp?: number;
       ac?: number;
+      initiative?: number;
       statuses?: string[];
       sessionId?: string;
     },
   ) {
     const response = await api.put(`/api/tokens/${tokenId}`, data);
     return response.data;
+  },
+
+  async removeFromSession(tokenId: string) {
+    await api.delete(`/api/tokens/${tokenId}/session`);
   },
 
   async deleteToken(tokenId: string) {

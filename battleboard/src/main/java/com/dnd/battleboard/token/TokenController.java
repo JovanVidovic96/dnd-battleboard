@@ -32,6 +32,12 @@ public class TokenController {
         return ResponseEntity.ok(tokenService.updateToken(cmd, tokenId));
     }
 
+    @DeleteMapping("/{tokenId}/session")
+    public ResponseEntity<Void> removeToken(@PathVariable UUID tokenId){
+        tokenService.removeFromSession(tokenId);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/{tokenId}")
     public ResponseEntity<Void> deleteToken(@PathVariable UUID tokenId) {
         tokenService.deleteToken(tokenId);
