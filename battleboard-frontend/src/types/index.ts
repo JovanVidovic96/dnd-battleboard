@@ -52,4 +52,15 @@ export interface GameMap {
   cellWidth: number;
   cellHeight: number;
   active: boolean;
+  mapData: string | null;
+}
+
+export interface Session {
+  id: string;
+  name: string;
+  inviteCode: string;
+  hostUsername: string;
+  playerCount: number;
+  active: boolean;
+  activeMapId: string | null;
 }

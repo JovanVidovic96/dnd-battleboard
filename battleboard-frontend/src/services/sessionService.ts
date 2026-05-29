@@ -19,4 +19,9 @@ export const sessionService = {
   async deleteSession(sessionId: string) {
     await api.delete(`/api/sessions/${sessionId}`);
   },
+
+  async setActiveMap(sessionId: string, mapId: string) {
+    const response = await api.put(`/api/sessions/${sessionId}`, { activeMapId: mapId });
+    return response.data;
+  },
 };

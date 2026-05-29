@@ -6,6 +6,19 @@ import { authService } from "../services/authService";
 import type { Token, DiceRoll } from "../types";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
+import { mapService } from '../services/mapService';
+import type { GameMap } from '../types';
+import { sessionService } from '../services/sessionService';
+
+export interface Session {
+  id: string;
+  name: string;
+  inviteCode: string;
+  hostUsername: string;
+  playerCount: number;
+  active: boolean;
+  activeMapId: string | null;
+}
 
 function GamePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -24,6 +37,19 @@ function GamePage() {
   const dragTokenRef = useRef<Token | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const [hpChange, setHpChange] = useState(0);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [availableMaps, setAvailableMaps] = useState<GameMap[]>([]);
+  const [activeMapData, setActiveMapData] = useState<MapData | null>(null);
+  const [activeMap, setActiveMap] = useState<GameMap | null>(null);
+  const BIOME_COLORS: Record<string, { base: string; alt: string; grid: string }> = {
+    CAVE:     { base: '#1a1510', alt: '#12100a', grid: 'rgba(201,147,58,0.12)' },
+    FOREST:   { base: '#0d1a0d', alt: '#0a1408', grid: 'rgba(45,122,58,0.2)' },
+    OCEAN:    { base: '#080d1a', alt: '#060a14', grid: 'rgba(42,96,128,0.2)' },
+    DESERT:   { base: '#1a1508', alt: '#141006', grid: 'rgba(210,180,80,0.2)' },
+    MOUNTAIN: { base: '#121212', alt: '#0d0d0d', grid: 'rgba(180,180,180,0.15)' },
+    CITY:     { base: '#0f0f14', alt: '#0a0a10', grid: 'rgba(100,120,200,0.15)' },
+    DUNGEON:  { base: '#100a0a', alt: '#0a0606', grid: 'rgba(139,26,26,0.2)' },
+  };
 
   // WebSocket konekcija
   useEffect(() => {
@@ -83,6 +109,24 @@ function GamePage() {
     // Background
     ctx.fillStyle = "#0d0a06";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Biom tekstura
+    if (activeMap) {
+      const colors = BIOME_COLORS[activeMap.biome] || BIOME_COLORS.CAVE;
+      const GS = 48 * zoom;
+      for (let r = 0; r < activeMap.cellHeight; r++) {
+        for (let c = 0; c < activeMap.cellWidth; c++) {
+          const x = c * GS + pan.x;
+          const y = r * GS + pan.y;
+          const seed = (r * 7 + c * 13) % 5;
+          ctx.fillStyle = seed < 2 ? colors.alt : colors.base;
+          ctx.fillRect(x, y, GS, GS);
+          if (seed === 0) {
+            ctx.fillStyle = 'rgba(0,0,0,0.08)';
+            ctx.fillRect(x + 2, y + 2, GS - 4, GS - 4);
+          }
+        }
+      }
+    }
 
     // Grid
     const GRID = 48 * zoom;
@@ -101,7 +145,47 @@ function GamePage() {
       ctx.lineTo(canvas.width, y);
       ctx.stroke();
     }
+    // Biom pozadina ako ima aktivna mapa
+    if (activeMapData) {
+      // Walls
+      activeMapData.walls.forEach(([c, r]) => {
+        const x = c * GRID * zoom + pan.x;
+        const y = r * GRID * zoom + pan.y;
+        const size = GRID * zoom;
+        ctx.fillStyle = 'rgba(60,40,20,0.95)';
+        ctx.fillRect(x, y, size, size);
+        ctx.strokeStyle = 'rgba(100,70,30,0.8)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+      });
 
+      // Doors
+      activeMapData.doors.forEach(([c, r]) => {
+        const x = c * GRID * zoom + pan.x;
+        const y = r * GRID * zoom + pan.y;
+        const size = GRID * zoom;
+        ctx.fillStyle = 'rgba(139,90,43,0.7)';
+        ctx.fillRect(x + size * 0.1, y + size * 0.2, size * 0.8, size * 0.6);
+        ctx.strokeStyle = '#8b5a2b';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + size * 0.1, y + size * 0.2, size * 0.8, size * 0.6);
+        ctx.fillStyle = '#f5d485';
+        ctx.font = `bold ${Math.floor(size * 0.4)}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('D', x + size / 2, y + size / 2);
+      });
+
+      // Traps
+      activeMapData.traps.forEach(([c, r]) => {
+        const x = c * GRID * zoom + pan.x;
+        const y = r * GRID * zoom + pan.y;
+        const size = GRID * zoom;
+        ctx.fillStyle = '#c0392b';
+        ctx.font = `bold ${Math.floor(size * 0.5)}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('✕', x + size / 2, y + size / 2);
+      });
+    }
     // Tokeni
     tokens.forEach((token) => {
       const tx = token.x * zoom + pan.x;
@@ -132,7 +216,7 @@ function GamePage() {
         hpRatio > 0.5 ? "#2d7a3a" : hpRatio > 0.25 ? "#c9933a" : "#8b1a1a";
       ctx.fillRect(tx + 2, ty + size - 6, (size - 4) * Math.max(0, hpRatio), 4);
     });
-  }, [tokens, zoom, pan, selectedToken]);
+  }, [tokens, zoom, pan, selectedToken, activeMapData, activeMap]);
 
   const handleRoll = async () => {
     if (!sessionId) return;
@@ -167,6 +251,27 @@ function GamePage() {
       setSelectedToken(clicked);
       dragTokenRef.current = clicked;
     }
+  };
+
+  const handleLoadMap = async (mapId: string) => {
+    if (!sessionId) return;
+    try {
+      await sessionService.setActiveMap(sessionId, mapId);
+      const map = await mapService.getMap(mapId);
+      setActiveMap(map);
+      if (map.mapData) {
+        setActiveMapData(JSON.parse(map.mapData));
+      }
+      setShowMapModal(false);
+    } catch (err) {
+      console.error('Greška pri učitavanju mape', err);
+    }
+  };
+
+  const handleOpenMapModal = async () => {
+    const maps = await mapService.getMaps();
+    setAvailableMaps(maps);
+    setShowMapModal(true);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -279,8 +384,10 @@ function GamePage() {
             onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
             style={btnStyle}
           >
+
             +
           </button>
+          <button onClick={handleOpenMapModal} style={btnStyle}>🗺 Mapa</button>
           <span
             style={{ color: "#f4edd8", fontSize: "12px", alignSelf: "center" }}
           >
@@ -718,6 +825,29 @@ function GamePage() {
           </div>
         </div>
       </div>
+      {showMapModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: '#12100a', border: '1px solid rgba(201,147,58,0.4)', borderRadius: '8px', padding: '24px', width: '420px', maxHeight: '80vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontFamily: 'serif', color: '#c9933a', fontSize: '16px', flex: 1 }}>Izaberi mapu</h2>
+              <button onClick={() => setShowMapModal(false)} style={{ background: 'none', border: 'none', color: 'rgba(244,237,216,0.5)', fontSize: '16px', cursor: 'pointer' }}>✕</button>
+            </div>
+            {availableMaps.length === 0 ? (
+              <p style={{ color: 'rgba(244,237,216,0.45)', textAlign: 'center', padding: '24px' }}>Nemaš sačuvanih mapa.</p>
+            ) : (
+              availableMaps.map(map => (
+                <div key={map.id} onClick={() => handleLoadMap(map.id)} style={{ padding: '10px 12px', border: '1px solid rgba(201,147,58,0.2)', borderRadius: '4px', marginBottom: '6px', cursor: 'pointer', background: '#1e1a10', display: 'flex', alignItems: 'center', gap: '12px' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.6)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.2)')}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: 'serif', color: '#f5d485', fontSize: '14px' }}>{map.name}</div>
+                    <div style={{ fontSize: '11px', color: 'rgba(244,237,216,0.45)' }}>{map.biome} · {map.cellWidth}×{map.cellHeight}</div>
+                  </div>
+                  <span style={{ color: '#c9933a', fontSize: '12px' }}>Učitaj →</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

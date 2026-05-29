@@ -1,6 +1,7 @@
 package com.dnd.battleboard.session;
 
-
+import com.dnd.battleboard.map.Map;
+import com.dnd.battleboard.map.MapRepository;
 import com.dnd.battleboard.session.dto.CreateSessionCommand;
 import com.dnd.battleboard.session.dto.SessionResponse;
 import com.dnd.battleboard.session.dto.UpdateSessionCommand;
@@ -13,12 +14,14 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+
 @Service
 @RequiredArgsConstructor
 public class SessionService {
     private final UserRepository userRepository;
     private final SessionMapper sessionMapper;
     private final SessionRepository sessionRepository;
+    private final MapRepository mapRepository;
 
     private String generateInviteCode () {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
@@ -62,8 +65,14 @@ public class SessionService {
     public SessionResponse updateSession(UUID sessionId, UpdateSessionCommand cmd) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found."));
-        session.setName(cmd.getName());
-        session.setActive(cmd.isActive());
+
+        if (cmd.getName() != null) session.setName(cmd.getName());
+        if (cmd.getActiveMapId() != null) {
+            Map map = mapRepository.findById(cmd.getActiveMapId())
+                    .orElseThrow(() -> new RuntimeException("Map not found."));
+            session.setActiveMap(map);
+        }
+        if (cmd.getIsActive() != null) session.setActive(cmd.getIsActive());
         sessionRepository.save(session);
         return sessionMapper.toResponse(session);
     }

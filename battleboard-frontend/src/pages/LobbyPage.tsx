@@ -4,6 +4,8 @@ import { authService } from "../services/authService";
 import { sessionService } from "../services/sessionService";
 import { tokenService } from "../services/tokenService";
 import type { Session } from "../types";
+import { mapService } from "../services/mapService";
+import type { GameMap } from "../types";
 
 function LobbyPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -22,6 +24,16 @@ function LobbyPage() {
     width: 1,
     height: 1,
   });
+  const [myMaps, setMyMaps] = useState<GameMap[]>([]);
+  const [showMapForm, setShowMapForm] = useState(false);
+  const [newMap, setNewMap] = useState({
+    name: "",
+    biome: "CAVE",
+    backgroundImgUrl: "",
+    cellSize: 48,
+    cellWidth: 24,
+    cellHeight: 16,
+  });
 
   const loadSessions = async () => {
     try {
@@ -34,6 +46,7 @@ function LobbyPage() {
   useEffect(() => {
     loadSessions();
     tokenService.getMyTokens().then(setMyTokens).catch(console.error);
+    mapService.getMaps().then(setMyMaps).catch(console.error);
   }, []);
 
   const handleCreateSession = async () => {
@@ -102,6 +115,34 @@ function LobbyPage() {
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (err) {
       console.error("Greška pri brisanju sesije");
+    }
+  };
+
+  const handleCreateMap = async () => {
+    if (!newMap.name.trim()) return;
+    try {
+      const created = await mapService.createMap(newMap);
+      setMyMaps((prev) => [...prev, created]);
+      setShowMapForm(false);
+      setNewMap({
+        name: "",
+        biome: "CAVE",
+        backgroundImgUrl: "",
+        cellSize: 48,
+        cellWidth: 24,
+        cellHeight: 16,
+      });
+    } catch (err) {
+      console.error("Greška pri kreiranju mape");
+    }
+  };
+
+  const handleDeleteMap = async (mapId: string) => {
+    try {
+      await mapService.deleteMap(mapId);
+      setMyMaps((prev) => prev.filter((m) => m.id !== mapId));
+    } catch (err) {
+      console.error("Greška pri brisanju mape");
     }
   };
 
@@ -295,7 +336,6 @@ function LobbyPage() {
             </button>
           </div>
 
-          {/* FORMA ZA KREIRANJE TOKENA */}
           {showTokenForm && (
             <div
               style={{
@@ -390,7 +430,6 @@ function LobbyPage() {
             </div>
           )}
 
-          {/* LISTA TOKENA */}
           {myTokens.length === 0 ? (
             <p
               style={{
@@ -405,7 +444,6 @@ function LobbyPage() {
           ) : (
             myTokens.map((token) => (
               <div key={token.id} style={sessionRowStyle}>
-                {/* TOKEN AVATAR */}
                 <div
                   style={{
                     width: "32px",
@@ -426,7 +464,6 @@ function LobbyPage() {
                 >
                   {token.name[0].toUpperCase()}
                 </div>
-                {/* TOKEN INFO */}
                 <div style={{ flex: 1 }}>
                   <div
                     style={{
@@ -447,7 +484,6 @@ function LobbyPage() {
                     {token.npc ? "NPC" : "PC"}
                   </div>
                 </div>
-                {/* DUGMAD ZA TOKEN */}
                 <div
                   style={{
                     display: "flex",
@@ -476,6 +512,179 @@ function LobbyPage() {
                       fontSize: "11px",
                       padding: "4px 10px",
                     }}
+                  >
+                    Obriši
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* ===== MOJE MAPE ===== */}
+        <div style={cardStyle}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <h2 style={{ ...sectionTitleStyle, marginBottom: 0, flex: 1 }}>
+              Moje mape
+            </h2>
+            <button
+              onClick={() => setShowMapForm(!showMapForm)}
+              style={buttonStyle}
+            >
+              + Nova mapa
+            </button>
+          </div>
+
+          {showMapForm && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                marginBottom: "16px",
+                padding: "12px",
+                background: "#1e1a10",
+                borderRadius: "4px",
+                border: "1px solid rgba(201,147,58,0.15)",
+              }}
+            >
+              <input
+                placeholder="Naziv mape"
+                value={newMap.name}
+                onChange={(e) =>
+                  setNewMap((p) => ({ ...p, name: e.target.value }))
+                }
+                style={inputStyle}
+              />
+              <div>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "rgba(244,237,216,0.45)",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Biom
+                </div>
+                <select
+                  value={newMap.biome}
+                  onChange={(e) =>
+                    setNewMap((p) => ({ ...p, biome: e.target.value }))
+                  }
+                  style={{ ...inputStyle, width: "100%" }}
+                >
+                  <option value="CAVE">Pećina</option>
+                  <option value="FOREST">Šuma</option>
+                  <option value="OCEAN">Okean</option>
+                  <option value="DESERT">Pustinja</option>
+                  <option value="MOUNTAIN">Planina</option>
+                  <option value="CITY">Grad</option>
+                  <option value="DUNGEON">Tamnica</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "rgba(244,237,216,0.45)",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Širina (ćelije)
+                  </div>
+                  <input
+                    type="number"
+                    value={newMap.cellWidth}
+                    onChange={(e) =>
+                      setNewMap((p) => ({ ...p, cellWidth: +e.target.value }))
+                    }
+                    style={{ ...inputStyle, width: "100%" }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "rgba(244,237,216,0.45)",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Visina (ćelije)
+                  </div>
+                  <input
+                    type="number"
+                    value={newMap.cellHeight}
+                    onChange={(e) =>
+                      setNewMap((p) => ({ ...p, cellHeight: +e.target.value }))
+                    }
+                    style={{ ...inputStyle, width: "100%" }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={handleCreateMap} style={buttonStyle}>
+                  Kreiraj
+                </button>
+                <button
+                  onClick={() => setShowMapForm(false)}
+                  style={{ ...buttonStyle, color: "#c0392b" }}
+                >
+                  Otkaži
+                </button>
+              </div>
+            </div>
+          )}
+
+          {myMaps.length === 0 ? (
+            <p
+              style={{
+                color: "rgba(244,237,216,0.45)",
+                fontSize: "14px",
+                textAlign: "center",
+                padding: "24px",
+              }}
+            >
+              Nemaš sačuvanih mapa. Kreiraj novu!
+            </p>
+          ) : (
+            myMaps.map((map) => (
+              <div key={map.id} style={sessionRowStyle}>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontFamily: "serif",
+                      fontSize: "14px",
+                      color: "#f5d485",
+                    }}
+                  >
+                    {map.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "rgba(244,237,216,0.45)",
+                    }}
+                  >
+                    {map.biome} · {map.cellWidth}×{map.cellHeight} ćelija
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <button
+                    onClick={() => navigate(`/map-editor/${map.id}`)}
+                    style={buttonStyle}
+                  >
+                    Uredi
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMap(map.id)}
+                    style={{ ...buttonStyle, color: "#c0392b" }}
                   >
                     Obriši
                   </button>

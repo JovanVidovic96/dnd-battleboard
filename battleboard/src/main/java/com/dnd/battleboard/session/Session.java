@@ -1,6 +1,7 @@
 package com.dnd.battleboard.session;
 
 import com.dnd.battleboard.common.BaseEntity;
+import com.dnd.battleboard.map.Map;
 import com.dnd.battleboard.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -39,8 +40,11 @@ public class Session extends BaseEntity {
     )
     private List<User> players;
 
+    @ManyToOne
+    private Map activeMap;
+
     @Builder.Default
-    private boolean active = true;
+    private Boolean active = true;
 
     private LocalDateTime deletedAt = null;
 

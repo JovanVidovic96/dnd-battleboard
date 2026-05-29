@@ -22,5 +22,7 @@ public class SessionResponse {
 
     private int playerCount;
 
+    private UUID activeMapId;
+
     private boolean isActive;
 }

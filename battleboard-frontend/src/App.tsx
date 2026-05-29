@@ -3,6 +3,7 @@ import LoginPage from "./pages/LoginPage";
 import { authService } from "./services/authService";
 import LobbyPage from "./pages/LobbyPage";
 import GamePage from "./pages/GamePage";
+import MapEditorPage from "./pages/MapEditorPage";
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
         />
         <Route path="/lobby" element={<LobbyPage />} />
         <Route path="/game/:sessionId" element={<GamePage />} />
+        <Route path="/map-editor/:mapId" element={<MapEditorPage />} />
       </Routes>
     </BrowserRouter>
   );

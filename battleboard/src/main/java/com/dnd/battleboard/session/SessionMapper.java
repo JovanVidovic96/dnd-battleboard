@@ -2,11 +2,12 @@ package com.dnd.battleboard.session;
 
 import com.dnd.battleboard.session.dto.*;
 import com.dnd.battleboard.user.User;
+import lombok.Builder;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 
-
+@Builder
 @Component
 public class SessionMapper {
 
@@ -25,6 +26,7 @@ public class SessionMapper {
     public UpdateSessionCommand toCmd (UpdateSessionRequest dto) {
         return new UpdateSessionCommand(
                 dto.getName(),
+                dto.getActiveMapId(),
                 dto.isActive()
         );
     }
@@ -39,13 +41,14 @@ public class SessionMapper {
     }
 
     public SessionResponse toResponse (Session session) {
-        return new SessionResponse(
-                session.getId(),
-                session.getName(),
-                session.getInviteCode(),
-                session.getHost().getUsername(),
-                session.getPlayers().size(),
-                session.isActive()
-        );
+        return SessionResponse.builder()
+                .id(session.getId())
+                .name(session.getName())
+                .inviteCode(session.getInviteCode())
+                .hostUsername(session.getHost().getUsername())
+                .playerCount(session.getPlayers().size())
+                .activeMapId(session.getActiveMap() != null ? session.getActiveMap().getId() : null)
+                .isActive(session.getActive())
+                .build();
     }
 }

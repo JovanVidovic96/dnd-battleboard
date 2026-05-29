@@ -30,6 +30,13 @@ public class MapService {
         return mapMapper.toResponse(mapToSave);
     }
 
+    public MapResponse getMap(UUID mapId) {
+        Map map = mapRepository.findById(mapId)
+                .orElseThrow(() -> new RuntimeException("Map not found"));
+        return mapMapper.toResponse(map);
+    }
+
+
     public MapResponse updateMap(UUID mapId, UpdateMapCommand dto) {
         Map map = mapRepository.findById(mapId)
                 .orElseThrow(() -> new RuntimeException("Map not found."));

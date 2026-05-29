@@ -23,14 +23,19 @@ public class MapController {
         return ResponseEntity.ok(mapService.createMap(cmd,username));
     }
 
-    @PutMapping("{mapId}")
+    @GetMapping("/{mapId}")
+    public ResponseEntity<MapResponse> getMap(@PathVariable UUID mapId) {
+        return ResponseEntity.ok(mapService.getMap(mapId));
+    }
+
+    @PutMapping("/{mapId}")
     public ResponseEntity<MapResponse> updateMap(@PathVariable UUID mapId,
                                                  @RequestBody UpdateMapRequest req){
         UpdateMapCommand cmd = mapMapper.toCmd(req);
         return ResponseEntity.ok(mapService.updateMap(mapId,cmd));
     }
 
-    @DeleteMapping("{mapId}")
+    @DeleteMapping("/{mapId}")
     public ResponseEntity<Void> deleteMap(@PathVariable UUID mapId){
         mapService.deleteMap(mapId);
         return ResponseEntity.ok().build();
