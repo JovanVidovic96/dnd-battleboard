@@ -95,6 +95,12 @@ public class SessionService {
                 .collect(Collectors.toList());
     }
 
+    public SessionResponse getSession(UUID sessionId) {
+        Session session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found."));
+        return sessionMapper.toResponse(session);
+    }
+
     public List<SessionResponse> getActiveSessionByHost (String username) {
         User host = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Host not found"));

@@ -1,6 +1,7 @@
 package com.dnd.battleboard.token.dto;
 
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -20,6 +21,7 @@ public class CreateTokenRequest {
 
     private int ac;
 
+    @JsonProperty("isNpc")
     private boolean isNpc;
 
     private boolean enemy;

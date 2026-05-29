@@ -52,6 +52,11 @@ public class SessionController {
         return ResponseEntity.ok().build();
     }
 
+    @GetMapping("/{sessionId}")
+    public ResponseEntity<SessionResponse> getSession(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(sessionService.getSession(sessionId));
+    }
+
     @GetMapping("/host")
     public ResponseEntity<List<SessionResponse>> getSessionByHost() {
         String hostUsername = SecurityContextHolder.getContext().getAuthentication().getName();

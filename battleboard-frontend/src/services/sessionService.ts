@@ -24,4 +24,9 @@ export const sessionService = {
     const response = await api.put(`/api/sessions/${sessionId}`, { activeMapId: mapId });
     return response.data;
   },
+
+  async getSession(sessionId: string) {
+    const response = await api.get(`/api/sessions/${sessionId}`);
+    return response.data;
+  },
 };

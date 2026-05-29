@@ -385,6 +385,16 @@ function GamePage() {
       .catch(() => toast.error("Greška pri učitavanju istorije bacanja"));
   }, [sessionId]);
 
+  // Auto-load active map if session has one
+  useEffect(() => {
+    if (!sessionId) return;
+    sessionService.getSession(sessionId)
+      .then(session => {
+        if (session.activeMapId) applyMapToCanvas(session.activeMapId).catch(() => {});
+      })
+      .catch(() => {});
+  }, [sessionId]);
+
   // Canvas rendering sa kompletnim slojevima
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -531,7 +541,7 @@ function GamePage() {
         // Circle background
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fillStyle = token.enemy ? "#1a0808" : token.npc ? "#150e00" : "#080f1a";
+        ctx.fillStyle = token.enemy ? "#1a0808" : token.npc ? "#081a08" : "#080f1a";
         ctx.fill();
 
         // Image or initial letter
@@ -556,7 +566,7 @@ function GamePage() {
           ctx.drawImage(cachedImg, tx + 2, ty + 2, size - 4, size - 4);
           ctx.restore();
         } else if (token.name && token.name.length > 0) {
-          ctx.fillStyle = token.enemy ? "#c0392b" : token.npc ? "#f5d485" : "#c9933a";
+          ctx.fillStyle = token.enemy ? "#c0392b" : token.npc ? "#5cb85c" : "#c9933a";
           ctx.font = `bold ${Math.floor(size * 0.35)}px serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -566,7 +576,7 @@ function GamePage() {
         // Border (drawn after image so it's on top)
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e";
+        ctx.strokeStyle = token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e";
         ctx.lineWidth = selectedToken?.id === token.id ? 3 : 1.5;
         ctx.stroke();
 
@@ -663,31 +673,33 @@ function GamePage() {
     setCanvasCursor("grabbing");
   };
 
+  const applyMapToCanvas = async (mapId: string) => {
+    const map = await mapService.getMap(mapId);
+    setActiveMap(map);
+    const canvas = canvasRef.current;
+    if (canvas && canvas.offsetWidth > 0) {
+      const zoomX = canvas.offsetWidth / (map.cellWidth * 48);
+      const zoomY = canvas.offsetHeight / (map.cellHeight * 48);
+      const fitZoom = Math.min(zoomX, zoomY) * 0.95;
+      setZoom(fitZoom);
+      setPan({
+        x: (canvas.offsetWidth - map.cellWidth * 48 * fitZoom) / 2,
+        y: (canvas.offsetHeight - map.cellHeight * 48 * fitZoom) / 2,
+      });
+    }
+    setActiveMapData(
+      map.mapData ? { ...INITIAL_MAP_DATA, ...JSON.parse(map.mapData) } : INITIAL_MAP_DATA
+    );
+    setOpenedDoors({});
+    revealedCellsRef.current = new Set();
+    setRevealedCells(new Set());
+  };
+
   const handleLoadMap = async (mapId: string) => {
     if (!sessionId) return;
     try {
       await sessionService.setActiveMap(sessionId, mapId);
-      const map = await mapService.getMap(mapId);
-      setActiveMap(map);
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const zoomX = canvas.offsetWidth / (map.cellWidth * 48);
-        const zoomY = canvas.offsetHeight / (map.cellHeight * 48);
-        const fitZoom = Math.min(zoomX, zoomY) * 0.95;
-        setZoom(fitZoom);
-        setPan({
-          x: (canvas.offsetWidth - map.cellWidth * 48 * fitZoom) / 2,
-          y: (canvas.offsetHeight - map.cellHeight * 48 * fitZoom) / 2,
-        });
-      }
-      setActiveMapData(
-        map.mapData
-          ? { ...INITIAL_MAP_DATA, ...JSON.parse(map.mapData) }
-          : INITIAL_MAP_DATA
-      );
-      setOpenedDoors({});
-      revealedCellsRef.current = new Set();
-      setRevealedCells(new Set());
+      await applyMapToCanvas(mapId);
       setShowMapModal(false);
     } catch {
       toast.error("Greška pri učitavanju mape");
@@ -779,6 +791,21 @@ function GamePage() {
       }
     } catch {
       toast.error("Greška pri ažuriranju HP-a");
+    }
+  };
+
+  const handleStatusToggle = async (status: string) => {
+    if (!selectedToken) return;
+    const current = selectedToken.statuses || [];
+    const newStatuses = current.includes(status)
+      ? current.filter(s => s !== status)
+      : [...current, status];
+    setTokens(prev => prev.map(t => t.id === selectedToken.id ? { ...t, statuses: newStatuses } : t));
+    setSelectedToken(prev => prev ? { ...prev, statuses: newStatuses } : null);
+    try {
+      await tokenService.updateToken(selectedToken.id, { statuses: newStatuses });
+    } catch {
+      toast.error("Greška pri ažuriranju statusa");
     }
   };
 
@@ -1055,18 +1082,18 @@ function GamePage() {
                       style={{
                         width: "28px", height: "28px", borderRadius: "50%",
                         objectFit: "cover", flexShrink: 0,
-                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e"}`,
+                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
                       }}
                     />
                   ) : (
                     <div
                       style={{
                         width: "28px", height: "28px", borderRadius: "50%",
-                        background: token.enemy ? "rgba(139,26,26,0.3)" : token.npc ? "rgba(201,147,58,0.15)" : "rgba(27,77,142,0.3)",
-                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e"}`,
+                        background: token.enemy ? "rgba(139,26,26,0.3)" : token.npc ? "rgba(45,122,58,0.2)" : "rgba(27,77,142,0.3)",
+                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: "12px", fontWeight: 700,
-                        color: token.enemy ? "#c0392b" : token.npc ? "#f5d485" : "#c9933a",
+                        color: token.enemy ? "#c0392b" : token.npc ? "#5cb85c" : "#c9933a",
                       }}
                     >
                       {token.name ? token.name[0].toUpperCase() : '?'}
@@ -1105,6 +1132,16 @@ function GamePage() {
                     }}
                   />
                 </div>
+
+                {token.statuses && token.statuses.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginTop: "4px" }}>
+                    {token.statuses.map(s => (
+                      <span key={s} style={{ fontSize: "8px", padding: "1px 4px", background: "rgba(139,26,26,0.2)", border: "1px solid rgba(192,57,43,0.3)", borderRadius: "2px", color: "#c0392b" }}>
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {selectedToken?.id === token.id && (
                   <div
@@ -1267,6 +1304,43 @@ function GamePage() {
                         >
                           Postavi
                         </button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
+                      <div style={{ fontSize: "10px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "6px" }}>
+                        STATUSI
+                      </div>
+                      {(selectedToken.statuses || []).length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "6px" }}>
+                          {(selectedToken.statuses || []).map(s => (
+                            <span
+                              key={s}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(139,26,26,0.2)", border: "1px solid rgba(192,57,43,0.4)", borderRadius: "3px", padding: "2px 5px", fontSize: "9px", color: "#c0392b" }}
+                            >
+                              {s}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleStatusToggle(s); }}
+                                style={{ background: "none", border: "none", color: "#c0392b", cursor: "pointer", padding: "0", fontSize: "10px", lineHeight: 1 }}
+                              >×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
+                        {["Blinded","Charmed","Frightened","Grappled","Invisible","Paralyzed","Poisoned","Prone","Stunned","Unconscious"].map(s => {
+                          const active = (selectedToken.statuses || []).includes(s);
+                          return (
+                            <button
+                              key={s}
+                              onClick={(e) => { e.stopPropagation(); handleStatusToggle(s); }}
+                              style={{ fontSize: "9px", padding: "2px 5px", cursor: "pointer", borderRadius: "3px", fontFamily: "serif", background: active ? "rgba(139,26,26,0.25)" : "rgba(0,0,0,0.2)", border: `1px solid ${active ? "rgba(192,57,43,0.6)" : "rgba(201,147,58,0.2)"}`, color: active ? "#c0392b" : "rgba(244,237,216,0.45)" }}
+                            >
+                              {s}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

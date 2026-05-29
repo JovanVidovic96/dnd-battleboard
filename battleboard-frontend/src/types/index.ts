@@ -3,15 +3,6 @@ export interface User {
   token: string;
 }
 
-export interface Session {
-  id: string;
-  name: string;
-  inviteCode: string;
-  hostUsername: string;
-  playerCount: number;
-  active: boolean;
-}
-
 export interface Token {
   id: string;
   sessionId: string | null;

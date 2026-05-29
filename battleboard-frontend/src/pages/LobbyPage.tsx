@@ -406,7 +406,7 @@ function LobbyPage() {
                 <div style={{ display: "flex", gap: "6px" }}>
                   {([
                     { label: "PC", isNpc: false, enemy: false, activeColor: "#7aaee0", activeBorder: "rgba(27,77,142,0.8)", activeBg: "rgba(27,77,142,0.2)" },
-                    { label: "NPC", isNpc: true, enemy: false, activeColor: "#f5d485", activeBorder: "rgba(201,147,58,0.8)", activeBg: "rgba(201,147,58,0.15)" },
+                    { label: "NPC", isNpc: true, enemy: false, activeColor: "#5cb85c", activeBorder: "rgba(45,122,58,0.8)", activeBg: "rgba(45,122,58,0.15)" },
                     { label: "Enemy", isNpc: true, enemy: true, activeColor: "#e07a7a", activeBorder: "rgba(139,26,26,0.8)", activeBg: "rgba(139,26,26,0.2)" },
                   ] as const).map((type) => {
                     const active = newToken.isNpc === type.isNpc && newToken.enemy === type.enemy;
@@ -497,18 +497,18 @@ function LobbyPage() {
                     style={{
                       width: "32px", height: "32px", borderRadius: "50%",
                       objectFit: "cover", flexShrink: 0,
-                      border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e"}`,
+                      border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
                     }}
                   />
                 ) : (
                   <div
                     style={{
                       width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-                      background: token.enemy ? "rgba(139,26,26,0.3)" : token.npc ? "rgba(201,147,58,0.15)" : "rgba(27,77,142,0.3)",
-                      border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e"}`,
+                      background: token.enemy ? "rgba(139,26,26,0.3)" : token.npc ? "rgba(45,122,58,0.2)" : "rgba(27,77,142,0.3)",
+                      border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: "13px", fontWeight: 700,
-                      color: token.enemy ? "#c0392b" : token.npc ? "#f5d485" : "#c9933a",
+                      color: token.enemy ? "#c0392b" : token.npc ? "#5cb85c" : "#c9933a",
                     }}
                   >
                     {token.name[0].toUpperCase()}
@@ -777,6 +777,7 @@ const inputStyle: React.CSSProperties = {
 const sessionRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
+  gap: "10px",
   padding: "10px 12px",
   border: "1px solid rgba(201,147,58,0.15)",
   borderRadius: "4px",

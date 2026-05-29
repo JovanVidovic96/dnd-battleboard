@@ -1,5 +1,6 @@
 package com.dnd.battleboard.token.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,8 +38,10 @@ public class TokenResponse {
 
     private int initiative;
 
+    @JsonProperty("npc")
     private boolean isNpc;
 
+    @JsonProperty("enemy")
     private boolean enemy;
 
     private List<String> statuses;
