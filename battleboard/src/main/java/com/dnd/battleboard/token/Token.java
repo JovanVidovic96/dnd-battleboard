@@ -62,6 +62,10 @@ public class Token extends BaseEntity {
     @Column(nullable = false)
     private boolean isNpc;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean enemy = false;
+
     @ElementCollection(fetch = FetchType.LAZY)
     private List<String> statuses;
 

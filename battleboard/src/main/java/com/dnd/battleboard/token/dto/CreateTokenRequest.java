@@ -21,4 +21,6 @@ public class CreateTokenRequest {
     private int ac;
 
     private boolean isNpc;
+
+    private boolean enemy;
 }

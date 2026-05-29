@@ -531,7 +531,7 @@ function GamePage() {
         // Circle background
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fillStyle = token.npc ? "#1a0808" : "#080f1a";
+        ctx.fillStyle = token.enemy ? "#1a0808" : token.npc ? "#150e00" : "#080f1a";
         ctx.fill();
 
         // Image or initial letter
@@ -556,7 +556,7 @@ function GamePage() {
           ctx.drawImage(cachedImg, tx + 2, ty + 2, size - 4, size - 4);
           ctx.restore();
         } else if (token.name && token.name.length > 0) {
-          ctx.fillStyle = token.npc ? "#c0392b" : "#c9933a";
+          ctx.fillStyle = token.enemy ? "#c0392b" : token.npc ? "#f5d485" : "#c9933a";
           ctx.font = `bold ${Math.floor(size * 0.35)}px serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -566,7 +566,7 @@ function GamePage() {
         // Border (drawn after image so it's on top)
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = token.npc ? "#8b1a1a" : "#1b4d8e";
+        ctx.strokeStyle = token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e";
         ctx.lineWidth = selectedToken?.id === token.id ? 3 : 1.5;
         ctx.stroke();
 
@@ -1055,25 +1055,18 @@ function GamePage() {
                       style={{
                         width: "28px", height: "28px", borderRadius: "50%",
                         objectFit: "cover", flexShrink: 0,
-                        border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
+                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e"}`,
                       }}
                     />
                   ) : (
                     <div
                       style={{
-                        width: "28px",
-                        height: "28px",
-                        borderRadius: "50%",
-                        background: token.npc
-                          ? "rgba(139,26,26,0.3)"
-                          : "rgba(27,77,142,0.3)",
-                        border: `1.5px solid ${token.npc ? "#8b1a1a" : "#1b4d8e"}`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        color: token.npc ? "#c0392b" : "#c9933a",
+                        width: "28px", height: "28px", borderRadius: "50%",
+                        background: token.enemy ? "rgba(139,26,26,0.3)" : token.npc ? "rgba(201,147,58,0.15)" : "rgba(27,77,142,0.3)",
+                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#c9933a" : "#1b4d8e"}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: "12px", fontWeight: 700,
+                        color: token.enemy ? "#c0392b" : token.npc ? "#f5d485" : "#c9933a",
                       }}
                     >
                       {token.name ? token.name[0].toUpperCase() : '?'}
@@ -1089,7 +1082,7 @@ function GamePage() {
                         color: "rgba(244,237,216,0.45)",
                       }}
                     >
-                      HP: {token.hp}/{token.maxHp} · AC: {token.ac}
+                      HP: {token.hp}/{token.maxHp} · AC: {token.ac} · {token.enemy ? "Enemy" : token.npc ? "NPC" : "PC"}
                     </div>
                   </div>
                 </div>

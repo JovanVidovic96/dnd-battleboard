@@ -29,6 +29,7 @@ export interface Token {
   statuses: string[];
   active: boolean;
   npc: boolean;
+  enemy: boolean;
 }
 
 export interface DiceRoll {

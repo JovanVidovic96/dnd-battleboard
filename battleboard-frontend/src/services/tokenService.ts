@@ -9,6 +9,7 @@ export const tokenService = {
     maxHp: number;
     ac: number;
     isNpc: boolean;
+    enemy: boolean;
   }) {
     const response = await api.post("/api/tokens", token);
     return response.data;

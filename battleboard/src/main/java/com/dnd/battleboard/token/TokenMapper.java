@@ -20,6 +20,7 @@ public class TokenMapper {
                 .maxHp(req.getMaxHp())
                 .ac(req.getAc())
                 .isNpc(req.isNpc())
+                .enemy(req.isEnemy())
                 .build();
     }
 
@@ -46,6 +47,7 @@ public class TokenMapper {
                 .maxHp(dto.getMaxHp())
                 .ac(dto.getAc())
                 .isNpc(dto.isNpc())
+                .enemy(dto.isEnemy())
                 .build();
     }
 
@@ -65,6 +67,7 @@ public class TokenMapper {
                 .ac(token.getAc())
                 .initiative(token.getInitiative())
                 .isNpc(token.isNpc())
+                .enemy(token.isEnemy())
                 .statuses(token.getStatuses())
                 .active(token.isActive())
                 .build();

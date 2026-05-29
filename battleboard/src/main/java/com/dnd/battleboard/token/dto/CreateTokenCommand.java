@@ -24,4 +24,5 @@ public class CreateTokenCommand {
 
     private boolean isNpc;
 
+    private boolean enemy;
 }

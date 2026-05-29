@@ -39,6 +39,8 @@ public class TokenResponse {
 
     private boolean isNpc;
 
+    private boolean enemy;
+
     private List<String> statuses;
 
     private boolean active;
