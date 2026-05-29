@@ -1,6 +1,7 @@
 package com.dnd.battleboard.websocket;
 
 import com.dnd.battleboard.token.TokenService;
+import com.dnd.battleboard.websocket.dto.FogMessage;
 import com.dnd.battleboard.websocket.dto.TokenHpMessage;
 import com.dnd.battleboard.websocket.dto.TokenMoveMessage;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,13 @@ public class WebSocketController {
         messagingTemplate.convertAndSend(
                 "/topic/session/" + message.getSessionId(),
                 message
+        );
+    }
+
+    @MessageMapping("/fog")
+    public void fogOfWar(FogMessage fogMessage) {
+        messagingTemplate.convertAndSend(
+                "/topic/session/" + fogMessage.getSessionId(), fogMessage
         );
     }
 }

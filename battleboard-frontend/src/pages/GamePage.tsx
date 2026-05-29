@@ -315,6 +315,11 @@ function GamePage() {
 
   const [openedDoors, setOpenedDoors] = useState<Record<string, boolean>>({});
   const [imageVersion, setImageVersion] = useState(0);
+  const [fogEnabled, setFogEnabled] = useState(false);
+  const [fogBrushMode, setFogBrushMode] = useState<'reveal' | 'hide'>('reveal');
+  const [revealedCells, setRevealedCells] = useState<Set<string>>(new Set());
+  const revealedCellsRef = useRef<Set<string>>(new Set());
+  const isFogPaintingRef = useRef(false);
 
   // Dodato detail polje za iscrtavanje bioma u sesiji
   const BIOME_COLORS: Record<string, { base: string; alt: string; grid: string; detail: string }> = {
@@ -344,6 +349,12 @@ function GamePage() {
                 t.id === data.tokenId ? { ...t, x: data.x, y: data.y } : t,
               ),
             );
+          }
+
+          if (data.revealedCells !== undefined) {
+            const cells = new Set<string>(data.revealedCells);
+            revealedCellsRef.current = cells;
+            setRevealedCells(cells);
           }
         });
       },
@@ -568,7 +579,19 @@ function GamePage() {
         }
       });
     }
-  }, [tokens, zoom, pan, selectedToken, activeMapData, activeMap, openedDoors, imageVersion]);
+
+    // SLOJ 8: Magla rata (Fog of War)
+    if (fogEnabled && activeMap) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.88)';
+      for (let r = 0; r < activeMap.cellHeight; r++) {
+        for (let c = 0; c < activeMap.cellWidth; c++) {
+          if (!revealedCells.has(`${c},${r}`)) {
+            ctx.fillRect(c * GRID + pan.x, r * GRID + pan.y, GRID, GRID);
+          }
+        }
+      }
+    }
+  }, [tokens, zoom, pan, selectedToken, activeMapData, activeMap, openedDoors, imageVersion, fogEnabled, revealedCells]);
 
   const handleRoll = async () => {
     if (!sessionId) return;
@@ -619,6 +642,21 @@ function GamePage() {
       }
     }
 
+    if (fogEnabled) {
+      isFogPaintingRef.current = true;
+      const GRID_SIZE = 48 * zoom;
+      const c = Math.floor((x - pan.x) / GRID_SIZE);
+      const r = Math.floor((y - pan.y) / GRID_SIZE);
+      if (activeMap && c >= 0 && c < activeMap.cellWidth && r >= 0 && r < activeMap.cellHeight) {
+        const key = `${c},${r}`;
+        const next = new Set(revealedCellsRef.current);
+        if (fogBrushMode === 'reveal') next.add(key); else next.delete(key);
+        revealedCellsRef.current = next;
+        setRevealedCells(next);
+      }
+      return;
+    }
+
     isPanningRef.current = true;
     panStartRef.current = { x: e.clientX, y: e.clientY };
     panOriginRef.current = { ...pan };
@@ -648,6 +686,8 @@ function GamePage() {
           : INITIAL_MAP_DATA
       );
       setOpenedDoors({});
+      revealedCellsRef.current = new Set();
+      setRevealedCells(new Set());
       setShowMapModal(false);
     } catch {
       toast.error("Greška pri učitavanju mape");
@@ -661,6 +701,26 @@ function GamePage() {
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isFogPaintingRef.current && fogEnabled) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const GRID_SIZE = 48 * zoom;
+      const c = Math.floor((x - pan.x) / GRID_SIZE);
+      const r = Math.floor((y - pan.y) / GRID_SIZE);
+      if (activeMap && c >= 0 && c < activeMap.cellWidth && r >= 0 && r < activeMap.cellHeight) {
+        const key = `${c},${r}`;
+        if (fogBrushMode === 'reveal' ? !revealedCellsRef.current.has(key) : revealedCellsRef.current.has(key)) {
+          const next = new Set(revealedCellsRef.current);
+          if (fogBrushMode === 'reveal') next.add(key); else next.delete(key);
+          revealedCellsRef.current = next;
+          setRevealedCells(next);
+        }
+      }
+      return;
+    }
     if (isPanningRef.current) {
       const dx = e.clientX - panStartRef.current.x;
       const dy = e.clientY - panStartRef.current.y;
@@ -723,6 +783,19 @@ function GamePage() {
   };
 
   const handleMouseUp = async () => {
+    if (isFogPaintingRef.current) {
+      isFogPaintingRef.current = false;
+      if (stompClientRef.current?.connected) {
+        stompClientRef.current.publish({
+          destination: "/app/fog",
+          body: JSON.stringify({
+            sessionId,
+            revealedCells: Array.from(revealedCellsRef.current),
+          }),
+        });
+      }
+      return;
+    }
     if (isPanningRef.current) {
       isPanningRef.current = false;
       setCanvasCursor("grab");
@@ -795,6 +868,60 @@ function GamePage() {
             +
           </button>
           <button onClick={handleOpenMapModal} style={btnStyle}>🗺 Mapa</button>
+          <button
+            onClick={() => {
+              setFogEnabled((f) => {
+                setCanvasCursor(!f ? "crosshair" : "grab");
+                return !f;
+              });
+            }}
+            style={{ ...fogBtnStyle, background: fogEnabled ? "rgba(30,55,90,0.7)" : undefined, borderColor: fogEnabled ? "rgba(60,110,180,0.6)" : undefined, color: fogEnabled ? "#7aaee0" : undefined }}
+          >
+            🌫 Magla
+          </button>
+          {fogEnabled && (
+            <>
+              <button
+                onClick={() => setFogBrushMode('reveal')}
+                style={{ ...fogBtnStyle, background: fogBrushMode === 'reveal' ? "rgba(30,70,45,0.7)" : undefined, borderColor: fogBrushMode === 'reveal' ? "rgba(60,160,90,0.6)" : undefined, color: fogBrushMode === 'reveal' ? "#7ecf96" : undefined }}
+              >
+                Otkrij
+              </button>
+              <button
+                onClick={() => setFogBrushMode('hide')}
+                style={{ ...fogBtnStyle, background: fogBrushMode === 'hide' ? "rgba(80,30,30,0.7)" : undefined, borderColor: fogBrushMode === 'hide' ? "rgba(180,60,60,0.6)" : undefined, color: fogBrushMode === 'hide' ? "#cf7e7e" : undefined }}
+              >
+                Sakrij
+              </button>
+              <button
+                onClick={() => {
+                  if (!activeMap) return;
+                  const all = new Set<string>();
+                  for (let r = 0; r < activeMap.cellHeight; r++)
+                    for (let c = 0; c < activeMap.cellWidth; c++)
+                      all.add(`${c},${r}`);
+                  revealedCellsRef.current = all;
+                  setRevealedCells(all);
+                  if (stompClientRef.current?.connected)
+                    stompClientRef.current.publish({ destination: "/app/fog", body: JSON.stringify({ sessionId, revealedCells: Array.from(all) }) });
+                }}
+                style={fogBtnStyle}
+              >
+                Sve otkrij
+              </button>
+              <button
+                onClick={() => {
+                  revealedCellsRef.current = new Set();
+                  setRevealedCells(new Set());
+                  if (stompClientRef.current?.connected)
+                    stompClientRef.current.publish({ destination: "/app/fog", body: JSON.stringify({ sessionId, revealedCells: [] }) });
+                }}
+                style={fogBtnStyle}
+              >
+                Sve sakrij
+              </button>
+            </>
+          )}
           <span
             style={{ color: "#f4edd8", fontSize: "12px", alignSelf: "center" }}
           >
@@ -1347,6 +1474,16 @@ const btnStyle: React.CSSProperties = {
   borderRadius: "4px",
   padding: "5px 12px",
   color: "#f5d485",
+  fontSize: "12px",
+  cursor: "pointer",
+};
+
+const fogBtnStyle: React.CSSProperties = {
+  background: "rgba(55,55,68,0.7)",
+  border: "1px solid rgba(110,110,135,0.45)",
+  borderRadius: "4px",
+  padding: "5px 12px",
+  color: "#9898b2",
   fontSize: "12px",
   cursor: "pointer",
 };
