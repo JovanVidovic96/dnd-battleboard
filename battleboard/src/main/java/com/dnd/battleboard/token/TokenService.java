@@ -51,6 +51,7 @@ public class TokenService {
         if (cmd.getAc() != 0) token.setAc(cmd.getAc());
         if (cmd.getStatuses() != null) token.setStatuses(cmd.getStatuses());
         if (cmd.getInitiative() != 0) token.setInitiative(cmd.getInitiative());
+        if (cmd.getStatsPublic() != null) token.setStatsPublic(cmd.getStatsPublic());
 
         tokenRepository.save(token);
         return tokenMapper.toResponse(token);

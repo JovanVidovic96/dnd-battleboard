@@ -21,6 +21,7 @@ export interface Token {
   active: boolean;
   npc: boolean;
   enemy: boolean;
+  statsPublic: boolean;
 }
 
 export interface DiceRoll {

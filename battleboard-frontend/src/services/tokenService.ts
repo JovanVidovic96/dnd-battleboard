@@ -35,6 +35,7 @@ export const tokenService = {
       initiative?: number;
       statuses?: string[];
       sessionId?: string;
+      statsPublic?: boolean;
     },
   ) {
     const response = await api.put(`/api/tokens/${tokenId}`, data);

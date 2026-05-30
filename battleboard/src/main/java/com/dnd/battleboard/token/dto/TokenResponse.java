@@ -44,6 +44,8 @@ public class TokenResponse {
     @JsonProperty("enemy")
     private boolean enemy;
 
+    private boolean statsPublic;
+
     private List<String> statuses;
 
     private boolean active;

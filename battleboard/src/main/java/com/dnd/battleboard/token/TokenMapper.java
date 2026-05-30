@@ -33,6 +33,7 @@ public class TokenMapper {
                 .ac(req.getAc())
                 .statuses(req.getStatuses())
                 .initiative(req.getInitiative())
+                .statsPublic(req.getStatsPublic())
                 .build();
     }
 
@@ -68,6 +69,7 @@ public class TokenMapper {
                 .initiative(token.getInitiative())
                 .isNpc(token.isNpc())
                 .enemy(token.isEnemy())
+                .statsPublic(token.isStatsPublic())
                 .statuses(token.getStatuses())
                 .active(token.isActive())
                 .build();

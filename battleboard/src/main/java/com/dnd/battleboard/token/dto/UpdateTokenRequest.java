@@ -23,4 +23,6 @@ public class UpdateTokenRequest {
     private List<String> statuses;
 
     private int initiative;
+
+    private Boolean statsPublic;
 }

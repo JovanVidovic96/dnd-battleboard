@@ -31,7 +31,7 @@ public class FileUploadController {
         Path targetDirectory = Paths.get("uploads");
         Files.createDirectories(targetDirectory);
         Files.copy(file.getInputStream(), targetDirectory.resolve(uniqueFilename), StandardCopyOption.REPLACE_EXISTING);
-        String url = "http://localhost:8080/uploads/" + uniqueFilename;
+        String url = "/uploads/" + uniqueFilename;
         return ResponseEntity.ok(Map.of("url", url));
     }
 }

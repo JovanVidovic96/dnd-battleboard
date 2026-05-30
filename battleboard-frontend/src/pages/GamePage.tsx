@@ -8,6 +8,7 @@ import SockJS from "sockjs-client";
 import { mapService } from '../services/mapService';
 import type { GameMap } from '../types';
 import { sessionService } from '../services/sessionService';
+import { authService } from '../services/authService';
 import { toast } from '../utils/toast';
 
 // Proširen interfejs da podržava sve nove elemente
@@ -310,6 +311,15 @@ function GamePage() {
   const [currentTurnIdx, setCurrentTurnIdx] = useState(-1);
   const [showMapModal, setShowMapModal] = useState(false);
   const [availableMaps, setAvailableMaps] = useState<GameMap[]>([]);
+  const [showAddTokenModal, setShowAddTokenModal] = useState(false);
+  const [libraryTokens, setLibraryTokens] = useState<Token[]>([]);
+  const [hostUsername, setHostUsername] = useState<string>("");
+
+  const currentUsername = authService.getUsername() ?? "";
+  const isDM = currentUsername !== "" && currentUsername === hostUsername;
+  const canSeeStats = (t: Token) => isDM || (!t.npc && !t.enemy) || t.statsPublic;
+  const canSeeStatuses = (t: Token) => isDM || (!t.npc && !t.enemy);
+  const canControl = (t: Token) => isDM || (!t.npc && !t.enemy && t.ownerUsername === currentUsername);
   const [activeMapData, setActiveMapData] = useState<MapData | null>(null);
   const [activeMap, setActiveMap] = useState<GameMap | null>(null);
 
@@ -351,10 +361,29 @@ function GamePage() {
             );
           }
 
+          if (data.hp !== undefined && data.tokenId) {
+            setTokens(prev => prev.map(t => t.id === data.tokenId ? { ...t, hp: data.hp } : t));
+            setSelectedToken(prev => prev?.id === data.tokenId ? { ...prev, hp: data.hp } : prev);
+          }
+
           if (data.revealedCells !== undefined) {
             const cells = new Set<string>(data.revealedCells);
             revealedCellsRef.current = cells;
             setRevealedCells(cells);
+          }
+
+          if (data.statsPublic !== undefined && data.tokenId) {
+            setTokens(prev => prev.map(t => t.id === data.tokenId ? { ...t, statsPublic: data.statsPublic } : t));
+            setSelectedToken(prev => prev?.id === data.tokenId ? { ...prev, statsPublic: data.statsPublic } : prev);
+          }
+
+          if (data.tokenAdded) {
+            setTokens(prev => prev.some(t => t.id === data.tokenAdded.id) ? prev : [...prev, data.tokenAdded]);
+          }
+
+          if (data.tokenRemoved) {
+            setTokens(prev => prev.filter(t => t.id !== data.tokenRemoved));
+            setSelectedToken(prev => prev?.id === data.tokenRemoved ? null : prev);
           }
         });
       },
@@ -385,11 +414,12 @@ function GamePage() {
       .catch(() => toast.error("Greška pri učitavanju istorije bacanja"));
   }, [sessionId]);
 
-  // Auto-load active map if session has one
+  // Fetch session to get host role and auto-load active map
   useEffect(() => {
     if (!sessionId) return;
     sessionService.getSession(sessionId)
       .then(session => {
+        setHostUsername(session.hostUsername);
         if (session.activeMapId) applyMapToCanvas(session.activeMapId).catch(() => {});
       })
       .catch(() => {});
@@ -628,12 +658,14 @@ function GamePage() {
     });
 
     if (clickedToken) {
-      isDraggingRef.current = true;
-      dragTokenRef.current = clickedToken;
-      const tx = clickedToken.x * zoom + pan.x;
-      const ty = clickedToken.y * zoom + pan.y;
-      dragOffsetRef.current = { x: x - tx, y: y - ty };
       setSelectedToken(clickedToken);
+      if (canControl(clickedToken)) {
+        isDraggingRef.current = true;
+        dragTokenRef.current = clickedToken;
+        const tx = clickedToken.x * zoom + pan.x;
+        const ty = clickedToken.y * zoom + pan.y;
+        dragOffsetRef.current = { x: x - tx, y: y - ty };
+      }
       return;
     }
 
@@ -710,6 +742,34 @@ function GamePage() {
     const maps = await mapService.getMaps();
     setAvailableMaps(maps);
     setShowMapModal(true);
+  };
+
+  const handleOpenAddTokenModal = async () => {
+    try {
+      const all = await tokenService.getMyTokens();
+      const sessionTokenIds = new Set(tokens.map(t => t.id));
+      setLibraryTokens(all.filter((t: Token) => !sessionTokenIds.has(t.id)));
+      setShowAddTokenModal(true);
+    } catch {
+      toast.error("Greška pri učitavanju biblioteke tokena");
+    }
+  };
+
+  const handleAddLibraryToken = async (tokenId: string) => {
+    if (!sessionId) return;
+    try {
+      const updated = await tokenService.updateToken(tokenId, { sessionId });
+      setTokens(prev => [...prev, updated]);
+      setLibraryTokens(prev => prev.filter(t => t.id !== tokenId));
+      if (stompClientRef.current?.connected) {
+        stompClientRef.current.publish({
+          destination: "/app/token/session-add",
+          body: JSON.stringify({ sessionId, tokenAdded: updated }),
+        });
+      }
+    } catch {
+      toast.error("Greška pri dodavanju tokena u sesiju");
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -791,6 +851,23 @@ function GamePage() {
       }
     } catch {
       toast.error("Greška pri ažuriranju HP-a");
+    }
+  };
+
+  const handleStatsVisibilityToggle = async (token: Token) => {
+    const newVal = !token.statsPublic;
+    try {
+      await tokenService.updateToken(token.id, { statsPublic: newVal });
+      setTokens(prev => prev.map(t => t.id === token.id ? { ...t, statsPublic: newVal } : t));
+      setSelectedToken(prev => prev?.id === token.id ? { ...prev, statsPublic: newVal } : prev);
+      if (stompClientRef.current?.connected) {
+        stompClientRef.current.publish({
+          destination: "/app/token/stats-visibility",
+          body: JSON.stringify({ tokenId: token.id, sessionId, statsPublic: newVal }),
+        });
+      }
+    } catch {
+      toast.error("Greška pri promeni vidljivosti statistika");
     }
   };
 
@@ -894,8 +971,8 @@ function GamePage() {
           >
             +
           </button>
-          <button onClick={handleOpenMapModal} style={btnStyle}>🗺 Mapa</button>
-          <button
+          {isDM && <button onClick={handleOpenMapModal} style={btnStyle}>🗺 Mapa</button>}
+          {isDM && <button
             onClick={() => {
               setFogEnabled((f) => {
                 setCanvasCursor(!f ? "crosshair" : "grab");
@@ -905,8 +982,8 @@ function GamePage() {
             style={{ ...fogBtnStyle, background: fogEnabled ? "rgba(30,55,90,0.7)" : undefined, borderColor: fogEnabled ? "rgba(60,110,180,0.6)" : undefined, color: fogEnabled ? "#7aaee0" : undefined }}
           >
             🌫 Magla
-          </button>
-          {fogEnabled && (
+          </button>}
+          {isDM && fogEnabled && (
             <>
               <button
                 onClick={() => setFogBrushMode('reveal')}
@@ -973,7 +1050,7 @@ function GamePage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 260px",
+          gridTemplateColumns: "1fr 340px",
           overflow: "hidden",
         }}
       >
@@ -992,15 +1069,15 @@ function GamePage() {
             background: "#12100a",
             borderLeft: "1px solid rgba(201,147,58,0.25)",
             overflow: "auto",
-            padding: "12px",
+            padding: "14px",
             display: "flex",
             flexDirection: "column",
-            gap: "8px",
+            gap: "10px",
           }}
         >
           {tokens.some((t) => t.initiative > 0) && (
             <>
-              <div style={{ fontFamily: "serif", fontSize: "11px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em" }}>
+              <div style={{ fontFamily: "serif", fontSize: "12px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em" }}>
                 INICIJATIVA
               </div>
               {[...tokens]
@@ -1016,9 +1093,9 @@ function GamePage() {
                       border: `1px solid ${idx === currentTurnIdx ? "rgba(201,147,58,0.5)" : "rgba(201,147,58,0.08)"}`,
                     }}
                   >
-                    <span style={{ fontSize: "10px", color: "rgba(244,237,216,0.35)", width: "14px" }}>{idx + 1}.</span>
-                    <span style={{ flex: 1, fontSize: "12px", color: idx === currentTurnIdx ? "#f5d485" : "#f4edd8" }}>{token.name}</span>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#c9933a" }}>{token.initiative}</span>
+                    <span style={{ fontSize: "11px", color: "rgba(244,237,216,0.35)", width: "16px" }}>{idx + 1}.</span>
+                    <span style={{ flex: 1, fontSize: "13px", color: idx === currentTurnIdx ? "#f5d485" : "#f4edd8" }}>{token.name}</span>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#c9933a" }}>{token.initiative}</span>
                   </div>
                 ))}
               <button
@@ -1034,15 +1111,11 @@ function GamePage() {
             </>
           )}
 
-          <div
-            style={{
-              fontFamily: "serif",
-              fontSize: "11px",
-              color: "rgba(244,237,216,0.45)",
-              letterSpacing: "0.1em",
-            }}
-          >
-            TOKENI U SESIJI
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{ fontFamily: "serif", fontSize: "12px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em", flex: 1 }}>
+              TOKENI U SESIJI
+            </div>
+            <button onClick={handleOpenAddTokenModal} style={{ ...btnStyle, padding: "2px 8px", fontSize: "14px", lineHeight: 1 }} title="Dodaj token u sesiju">+</button>
           </div>
 
           {tokens.length === 0 ? (
@@ -1080,19 +1153,19 @@ function GamePage() {
                       src={token.imageUrl}
                       alt={token.name}
                       style={{
-                        width: "28px", height: "28px", borderRadius: "50%",
+                        width: "34px", height: "34px", borderRadius: "50%",
                         objectFit: "cover", flexShrink: 0,
-                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
+                        border: `2px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
                       }}
                     />
                   ) : (
                     <div
                       style={{
-                        width: "28px", height: "28px", borderRadius: "50%",
+                        width: "34px", height: "34px", borderRadius: "50%",
                         background: token.enemy ? "rgba(139,26,26,0.3)" : token.npc ? "rgba(45,122,58,0.2)" : "rgba(27,77,142,0.3)",
-                        border: `1.5px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
+                        border: `2px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "12px", fontWeight: 700,
+                        fontSize: "14px", fontWeight: 700, flexShrink: 0,
                         color: token.enemy ? "#c0392b" : token.npc ? "#5cb85c" : "#c9933a",
                       }}
                     >
@@ -1100,43 +1173,44 @@ function GamePage() {
                     </div>
                   )}
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "13px", color: "#f4edd8" }}>
+                    <div style={{ fontSize: "14px", color: "#f4edd8" }}>
                       {token.name}
+                      {token.statsPublic && !isDM && <span style={{ fontSize: "10px", color: "#c9933a", marginLeft: "6px" }}>📖</span>}
                     </div>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: "rgba(244,237,216,0.45)",
-                      }}
-                    >
-                      HP: {token.hp}/{token.maxHp} · AC: {token.ac} · {token.enemy ? "Enemy" : token.npc ? "NPC" : "PC"}
-                    </div>
+                    {canSeeStats(token) ? (
+                      <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)" }}>
+                        HP: {token.hp}/{token.maxHp} · AC: {token.ac} · {token.enemy ? "Enemy" : token.npc ? "NPC" : "PC"}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "11px", color: "rgba(244,237,216,0.25)", fontStyle: "italic" }}>statistike skrivene</div>
+                    )}
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    marginTop: "6px",
-                    height: "3px",
-                    background: "rgba(0,0,0,0.4)",
-                    borderRadius: "2px",
-                  }}
-                >
+                {canSeeStats(token) && (
                   <div
                     style={{
-                      height: "100%",
+                      marginTop: "6px",
+                      height: "3px",
+                      background: "rgba(0,0,0,0.4)",
                       borderRadius: "2px",
-                      width: `${Math.max(0, (token.hp / token.maxHp) * 100)}%`,
-                      background:
-                        token.hp / token.maxHp > 0.5 ? "#2d7a3a" : "#8b1a1a",
                     }}
-                  />
-                </div>
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        borderRadius: "2px",
+                        width: `${Math.max(0, (token.hp / token.maxHp) * 100)}%`,
+                        background: token.hp / token.maxHp > 0.5 ? "#2d7a3a" : "#8b1a1a",
+                      }}
+                    />
+                  </div>
+                )}
 
-                {token.statuses && token.statuses.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginTop: "4px" }}>
+                {canSeeStatuses(token) && token.statuses && token.statuses.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "5px" }}>
                     {token.statuses.map(s => (
-                      <span key={s} style={{ fontSize: "8px", padding: "1px 4px", background: "rgba(139,26,26,0.2)", border: "1px solid rgba(192,57,43,0.3)", borderRadius: "2px", color: "#c0392b" }}>
+                      <span key={s} style={{ fontSize: "11px", padding: "2px 6px", background: "rgba(139,26,26,0.2)", border: "1px solid rgba(192,57,43,0.35)", borderRadius: "3px", color: "#e07a7a" }}>
                         {s}
                       </span>
                     ))}
@@ -1151,216 +1225,104 @@ function GamePage() {
                       paddingTop: "10px",
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: "10px",
-                        color: "rgba(244,237,216,0.45)",
-                        fontFamily: "serif",
-                        letterSpacing: "0.08em",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      HP KONTROLE
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "4px",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(-10);
-                        }}
-                        style={quickBtnStyle}
-                      >
-                        -10
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(-5);
-                        }}
-                        style={quickBtnStyle}
-                      >
-                        -5
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(-1);
-                        }}
-                        style={quickBtnStyle}
-                      >
-                        -1
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(1);
-                        }}
-                        style={{
-                          ...quickBtnStyle,
-                          color: "#2d7a3a",
-                          borderColor: "rgba(45,122,58,0.4)",
-                        }}
-                      >
-                        +1
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(5);
-                        }}
-                        style={{
-                          ...quickBtnStyle,
-                          color: "#2d7a3a",
-                          borderColor: "rgba(45,122,58,0.4)",
-                        }}
-                      >
-                        +5
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(10);
-                        }}
-                        style={{
-                          ...quickBtnStyle,
-                          color: "#2d7a3a",
-                          borderColor: "rgba(45,122,58,0.4)",
-                        }}
-                      >
-                        +10
-                      </button>
-                    </div>
-
-                    <div
-                      style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}
-                    >
-                      <input
-                        type="number"
-                        value={hpChange}
-                        onChange={(e) => setHpChange(+e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        placeholder="Vrednost"
-                        style={{
-                          flex: 1,
-                          background: "#0d0a06",
-                          border: "1px solid rgba(201,147,58,0.25)",
-                          borderRadius: "4px",
-                          padding: "4px 6px",
-                          color: "#f4edd8",
-                          fontSize: "12px",
-                          outline: "none",
-                        }}
-                      />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(-hpChange);
-                          setHpChange(0);
-                        }}
-                        style={{ ...quickBtnStyle, padding: "4px 8px" }}
-                      >
-                        DMG
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleHpUpdate(hpChange);
-                          setHpChange(0);
-                        }}
-                        style={{
-                          ...quickBtnStyle,
-                          padding: "4px 8px",
-                          color: "#2d7a3a",
-                          borderColor: "rgba(45,122,58,0.4)",
-                        }}
-                      >
-                        HEAL
-                      </button>
-                    </div>
-
-                    <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
-                      <div style={{ fontSize: "10px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "6px" }}>
-                        INICIJATIVA
-                      </div>
-                      <div style={{ display: "flex", gap: "4px" }}>
-                        <input
-                          type="number"
-                          value={initiativeInput}
-                          onChange={(e) => setInitiativeInput(+e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          min={0}
-                          max={30}
-                          style={{ flex: 1, background: "#0d0a06", border: "1px solid rgba(201,147,58,0.25)", borderRadius: "4px", padding: "4px 6px", color: "#f4edd8", fontSize: "12px", outline: "none" }}
-                        />
+                    {isDM && (token.npc || token.enemy) && (
+                      <div style={{ marginBottom: "10px" }}>
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleInitiativeSet(initiativeInput); }}
-                          style={{ ...quickBtnStyle, padding: "4px 10px", color: "#c9933a", borderColor: "rgba(201,147,58,0.4)" }}
+                          onClick={(e) => { e.stopPropagation(); handleStatsVisibilityToggle(token); }}
+                          style={{ ...quickBtnStyle, width: "100%", padding: "5px", color: token.statsPublic ? "#5cb85c" : "rgba(244,237,216,0.5)", borderColor: token.statsPublic ? "rgba(45,122,58,0.5)" : "rgba(201,147,58,0.25)" }}
                         >
-                          Postavi
+                          {token.statsPublic ? "✓ Statistike javne" : "Objavi statistike"}
                         </button>
                       </div>
-                    </div>
+                    )}
 
-                    <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
-                      <div style={{ fontSize: "10px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "6px" }}>
-                        STATUSI
+                    {!canControl(token) && (
+                      <p style={{ fontSize: "12px", color: "rgba(244,237,216,0.3)", textAlign: "center", margin: "8px 0" }}>
+                        {canSeeStats(token) ? "Samo pregled" : "Statistike skrivene"}
+                      </p>
+                    )}
+
+                    {canControl(token) && <>
+                      <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "8px" }}>
+                        HP KONTROLE
                       </div>
-                      {(selectedToken.statuses || []).length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "6px" }}>
-                          {(selectedToken.statuses || []).map(s => (
-                            <span
-                              key={s}
-                              onClick={(e) => e.stopPropagation()}
-                              style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(139,26,26,0.2)", border: "1px solid rgba(192,57,43,0.4)", borderRadius: "3px", padding: "2px 5px", fontSize: "9px", color: "#c0392b" }}
-                            >
-                              {s}
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleStatusToggle(s); }}
-                                style={{ background: "none", border: "none", color: "#c0392b", cursor: "pointer", padding: "0", fontSize: "10px", lineHeight: 1 }}
-                              >×</button>
-                            </span>
-                          ))}
+                      <div style={{ display: "flex", gap: "4px", marginBottom: "6px" }}>
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(-10); }} style={quickBtnStyle}>-10</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(-5); }} style={quickBtnStyle}>-5</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(-1); }} style={quickBtnStyle}>-1</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(1); }} style={{ ...quickBtnStyle, color: "#2d7a3a", borderColor: "rgba(45,122,58,0.4)" }}>+1</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(5); }} style={{ ...quickBtnStyle, color: "#2d7a3a", borderColor: "rgba(45,122,58,0.4)" }}>+5</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(10); }} style={{ ...quickBtnStyle, color: "#2d7a3a", borderColor: "rgba(45,122,58,0.4)" }}>+10</button>
+                      </div>
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                        <input
+                          type="number"
+                          value={hpChange}
+                          onChange={(e) => setHpChange(+e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          placeholder="Vrednost"
+                          style={{ flex: 1, background: "#0d0a06", border: "1px solid rgba(201,147,58,0.25)", borderRadius: "4px", padding: "6px 8px", color: "#f4edd8", fontSize: "13px", outline: "none" }}
+                        />
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(-hpChange); setHpChange(0); }} style={{ ...quickBtnStyle, padding: "4px 8px" }}>DMG</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(hpChange); setHpChange(0); }} style={{ ...quickBtnStyle, padding: "4px 8px", color: "#2d7a3a", borderColor: "rgba(45,122,58,0.4)" }}>HEAL</button>
+                      </div>
+
+                      <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
+                        <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "8px" }}>INICIJATIVA</div>
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          <input type="number" value={initiativeInput} onChange={(e) => setInitiativeInput(+e.target.value)} onClick={(e) => e.stopPropagation()} min={0} max={30} style={{ flex: 1, background: "#0d0a06", border: "1px solid rgba(201,147,58,0.25)", borderRadius: "4px", padding: "6px 8px", color: "#f4edd8", fontSize: "13px", outline: "none" }} />
+                          <button onClick={(e) => { e.stopPropagation(); handleInitiativeSet(initiativeInput); }} style={{ ...quickBtnStyle, padding: "4px 10px", color: "#c9933a", borderColor: "rgba(201,147,58,0.4)" }}>Postavi</button>
                         </div>
-                      )}
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
-                        {["Blinded","Charmed","Frightened","Grappled","Invisible","Paralyzed","Poisoned","Prone","Stunned","Unconscious"].map(s => {
-                          const active = (selectedToken.statuses || []).includes(s);
-                          return (
-                            <button
-                              key={s}
-                              onClick={(e) => { e.stopPropagation(); handleStatusToggle(s); }}
-                              style={{ fontSize: "9px", padding: "2px 5px", cursor: "pointer", borderRadius: "3px", fontFamily: "serif", background: active ? "rgba(139,26,26,0.25)" : "rgba(0,0,0,0.2)", border: `1px solid ${active ? "rgba(192,57,43,0.6)" : "rgba(201,147,58,0.2)"}`, color: active ? "#c0392b" : "rgba(244,237,216,0.45)" }}
-                            >
-                              {s}
-                            </button>
-                          );
-                        })}
                       </div>
-                    </div>
 
-                    <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          try {
-                            await tokenService.removeFromSession(token.id);
-                            setTokens((prev) => prev.filter((t) => t.id !== token.id));
-                            setSelectedToken(null);
-                          } catch {
-                            toast.error("Greška pri uklanjanju tokena iz sesije");
-                          }
-                        }}
-                        style={{ ...quickBtnStyle, width: "100%", padding: "5px", color: "#c0392b", borderColor: "rgba(192,57,43,0.4)" }}
-                      >
-                        Ukloni iz sesije
-                      </button>
-                    </div>
+                      <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
+                        <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "8px" }}>STATUSI</div>
+                        {(selectedToken.statuses || []).length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
+                            {(selectedToken.statuses || []).map(s => (
+                              <span key={s} onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(139,26,26,0.25)", border: "1px solid rgba(192,57,43,0.5)", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", color: "#e07a7a" }}>
+                                {s}
+                                <button onClick={(e) => { e.stopPropagation(); handleStatusToggle(s); }} style={{ background: "none", border: "none", color: "#e07a7a", cursor: "pointer", padding: "0", fontSize: "13px", lineHeight: 1 }}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                          {["Blinded","Charmed","Frightened","Grappled","Invisible","Paralyzed","Poisoned","Prone","Stunned","Unconscious"].map(s => {
+                            const active = (selectedToken.statuses || []).includes(s);
+                            return (
+                              <button key={s} onClick={(e) => { e.stopPropagation(); handleStatusToggle(s); }} style={{ fontSize: "12px", padding: "4px 9px", cursor: "pointer", borderRadius: "4px", fontFamily: "serif", background: active ? "rgba(139,26,26,0.3)" : "rgba(0,0,0,0.25)", border: `1px solid ${active ? "rgba(192,57,43,0.7)" : "rgba(201,147,58,0.25)"}`, color: active ? "#e07a7a" : "rgba(244,237,216,0.5)" }}>
+                                {s}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await tokenService.removeFromSession(token.id);
+                              setTokens((prev) => prev.filter((t) => t.id !== token.id));
+                              setSelectedToken(null);
+                              if (stompClientRef.current?.connected) {
+                                stompClientRef.current.publish({
+                                  destination: "/app/token/session-remove",
+                                  body: JSON.stringify({ sessionId, tokenRemoved: token.id }),
+                                });
+                              }
+                            } catch {
+                              toast.error("Greška pri uklanjanju tokena iz sesije");
+                            }
+                          }}
+                          style={{ ...quickBtnStyle, width: "100%", padding: "5px", color: "#c0392b", borderColor: "rgba(192,57,43,0.4)" }}
+                        >
+                          Ukloni iz sesije
+                        </button>
+                      </div>
+                    </>}
                   </div>
                 )}
               </div>
@@ -1508,6 +1470,37 @@ function GamePage() {
           </div>
         </div>
       </div>
+      {showAddTokenModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: '#12100a', border: '1px solid rgba(201,147,58,0.4)', borderRadius: '8px', padding: '24px', width: '420px', maxHeight: '80vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontFamily: 'serif', color: '#c9933a', fontSize: '16px', flex: 1 }}>Dodaj token u sesiju</h2>
+              <button onClick={() => setShowAddTokenModal(false)} style={{ background: 'none', border: 'none', color: 'rgba(244,237,216,0.5)', fontSize: '16px', cursor: 'pointer' }}>✕</button>
+            </div>
+            {libraryTokens.length === 0 ? (
+              <p style={{ color: 'rgba(244,237,216,0.45)', textAlign: 'center', padding: '24px' }}>Svi tvoji tokeni su već u sesiji.</p>
+            ) : (
+              libraryTokens.map(token => (
+                <div key={token.id} onClick={() => handleAddLibraryToken(token.id)} style={{ padding: '10px 12px', border: '1px solid rgba(201,147,58,0.2)', borderRadius: '4px', marginBottom: '6px', cursor: 'pointer', background: '#1e1a10', display: 'flex', alignItems: 'center', gap: '12px' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.6)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.2)')}>
+                  {token.imageUrl ? (
+                    <img src={token.imageUrl} alt={token.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: `2px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}` }} />
+                  ) : (
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: token.enemy ? 'rgba(139,26,26,0.3)' : token.npc ? 'rgba(45,122,58,0.2)' : 'rgba(27,77,142,0.3)', border: `2px solid ${token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e"}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 700, color: token.enemy ? '#c0392b' : token.npc ? '#5cb85c' : '#c9933a', flexShrink: 0 }}>
+                      {token.name[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: 'serif', color: '#f5d485', fontSize: '14px' }}>{token.name}</div>
+                    <div style={{ fontSize: '12px', color: 'rgba(244,237,216,0.45)' }}>HP: {token.maxHp} · AC: {token.ac} · {token.enemy ? 'Enemy' : token.npc ? 'NPC' : 'PC'}</div>
+                  </div>
+                  <span style={{ color: '#c9933a', fontSize: '12px' }}>+ Dodaj</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {showMapModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: '#12100a', border: '1px solid rgba(201,147,58,0.4)', borderRadius: '8px', padding: '24px', width: '420px', maxHeight: '80vh', overflow: 'auto' }}>
@@ -1559,9 +1552,9 @@ const quickBtnStyle: React.CSSProperties = {
   background: "rgba(139,26,26,0.15)",
   border: "1px solid rgba(192,57,43,0.3)",
   borderRadius: "4px",
-  padding: "3px 6px",
+  padding: "4px 7px",
   color: "#c0392b",
-  fontSize: "11px",
+  fontSize: "12px",
   cursor: "pointer",
   fontFamily: "serif",
 };

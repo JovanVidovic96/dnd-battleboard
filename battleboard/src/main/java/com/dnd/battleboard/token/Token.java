@@ -65,6 +65,9 @@ public class Token extends BaseEntity {
     @Column(columnDefinition = "boolean default false")
     private boolean enemy;
 
+    @Column(columnDefinition = "boolean default false")
+    private boolean statsPublic;
+
     @ElementCollection(fetch = FetchType.LAZY)
     private List<String> statuses;
 
