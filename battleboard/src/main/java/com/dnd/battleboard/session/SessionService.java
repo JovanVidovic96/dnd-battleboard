@@ -42,6 +42,10 @@ public class SessionService {
         User player = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Player not found."));
 
+        if (!Boolean.TRUE.equals(activeSession.getActive())) {
+            throw new RuntimeException("Session is not active");
+        }
+
         if (activeSession.getPlayers().contains(player)) {
             throw new RuntimeException("Player already in session");
         }

@@ -13,5 +13,5 @@ import java.util.UUID;
 public class UpdateSessionRequest {
     private String name;
     private UUID activeMapId;
-    private boolean isActive;
+    private Boolean isActive;
 }

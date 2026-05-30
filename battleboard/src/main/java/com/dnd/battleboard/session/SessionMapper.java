@@ -27,7 +27,7 @@ public class SessionMapper {
         return new UpdateSessionCommand(
                 dto.getName(),
                 dto.getActiveMapId(),
-                dto.isActive()
+                dto.getIsActive()
         );
     }
 
