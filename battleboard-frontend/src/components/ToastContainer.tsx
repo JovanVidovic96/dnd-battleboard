@@ -21,6 +21,7 @@ export function ToastContainer() {
       {toasts.map((t) => (
         <div
           key={t.id}
+          className="toast-slide"
           onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
           style={{
             background: '#12100a',

@@ -11,7 +11,7 @@ import { sessionService } from '../services/sessionService';
 import { authService } from '../services/authService';
 import { toast } from '../utils/toast';
 
-// Proširen interfejs da podržava sve nove elemente
+/** Cell-indexed positions for all placeable map elements. Each pair is [column, row]. */
 export interface MapData {
   walls: [number, number][];
   doors: [number, number][];
@@ -43,8 +43,7 @@ const INITIAL_MAP_DATA: MapData = {
   table: [], chair: []
 };
 
-// --- POMOĆNE PROCEDURALNE FUNKCIJE ZA CRTANJE TEKSTURA ---
-
+/** Draws a stone wall tile with brickwork mortar lines and depth shadow. */
 function drawProceduralWall(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.fillStyle = '#3c3d40';
@@ -88,6 +87,7 @@ function drawProceduralWall(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+/** Draws a wooden door tile in open or closed state, with frame detail and handle. */
 function drawProceduralDoor(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, isOpen: boolean) {
   ctx.save();
 
@@ -138,6 +138,7 @@ function drawProceduralDoor(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+/** Draws a trap tile with crossed X spikes and corner anchors. */
 function drawProceduralTrap(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.fillStyle = '#28292b';
@@ -171,6 +172,7 @@ function drawProceduralTrap(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+/** Draws a water tile with deep blue fill and ripple strokes. */
 function drawProceduralWater(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.fillStyle = '#1d3557';
@@ -186,6 +188,7 @@ function drawProceduralWater(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.restore();
 }
 
+/** Draws a mud tile with dark brown fill and puddle shapes. */
 function drawProceduralMud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.fillStyle = '#4a3728';
@@ -198,6 +201,7 @@ function drawProceduralMud(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.restore();
 }
 
+/** Draws a sand tile with warm yellow fill and scattered grain dots. */
 function drawProceduralSand(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.fillStyle = '#e9c46a';
@@ -211,6 +215,7 @@ function drawProceduralSand(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+/** Draws a fire tile with a radial amber glow and flame silhouette. */
 function drawProceduralFire(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   let grad = ctx.createRadialGradient(x+size/2, y+size/2, size*0.1, x+size/2, y+size/2, size*0.4);
@@ -230,6 +235,7 @@ function drawProceduralFire(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+/** Draws a tree tile with layered canopy circles and a drop shadow. */
 function drawProceduralTree(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -251,6 +257,7 @@ function drawProceduralTree(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+/** Draws a chest tile with wooden body, gold border, and lock clasp. */
 function drawProceduralChest(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   const pad = size * 0.15;
@@ -264,6 +271,7 @@ function drawProceduralChest(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.restore();
 }
 
+/** Draws a table tile with a wooden plank top and dark outline. */
 function drawProceduralTable(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   const pad = size * 0.1;
@@ -275,6 +283,7 @@ function drawProceduralTable(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.restore();
 }
 
+/** Draws a chair tile with seat rectangle and backrest bar. */
 function drawProceduralChair(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.fillStyle = '#a0522d';
@@ -286,6 +295,7 @@ function drawProceduralChair(ctx: CanvasRenderingContext2D, x: number, y: number
 
 const tokenImageCache = new Map<string, HTMLImageElement>();
 
+/** Main battleboard page rendering a canvas-based grid, token panel, fog of war, and dice roller with real-time WebSocket sync. */
 function GamePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -326,12 +336,13 @@ function GamePage() {
   const [openedDoors, setOpenedDoors] = useState<Record<string, boolean>>({});
   const [imageVersion, setImageVersion] = useState(0);
   const [fogEnabled, setFogEnabled] = useState(false);
+  const [fogActive, setFogActive] = useState(false);
   const [fogBrushMode, setFogBrushMode] = useState<'reveal' | 'hide'>('reveal');
   const [revealedCells, setRevealedCells] = useState<Set<string>>(new Set());
   const revealedCellsRef = useRef<Set<string>>(new Set());
   const isFogPaintingRef = useRef(false);
 
-  // Dodato detail polje za iscrtavanje bioma u sesiji
+  /** Per-biome color palette used when rendering the active map on the game canvas. */
   const BIOME_COLORS: Record<string, { base: string; alt: string; grid: string; detail: string }> = {
     CAVE:     { base: '#1a1510', alt: '#12100a', grid: 'rgba(201,147,58,0.12)', detail: '#261f18' },
     FOREST:   { base: '#0d1a0d', alt: '#0a1408', grid: 'rgba(45,122,58,0.2)',   detail: '#162e16' },
@@ -342,12 +353,11 @@ function GamePage() {
     DUNGEON:  { base: '#100a0a', alt: '#0a0606', grid: 'rgba(139,26,26,0.2)',   detail: '#1f1414' },
   };
 
-  // WebSocket konekcija
   useEffect(() => {
     if (!sessionId) return;
 
     const client = new Client({
-      webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
+      webSocketFactory: () => new SockJS(`${window.location.origin}/ws`),
       onConnect: () => {
 
         client.subscribe(`/topic/session/${sessionId}`, (message) => {
@@ -363,18 +373,19 @@ function GamePage() {
 
           if (data.hp !== undefined && data.tokenId) {
             setTokens(prev => prev.map(t => t.id === data.tokenId ? { ...t, hp: data.hp } : t));
-            setSelectedToken(prev => prev?.id === data.tokenId ? { ...prev, hp: data.hp } : prev);
+            setSelectedToken(prev => prev?.id === data.tokenId ? { ...prev, hp: data.hp } as Token : prev);
           }
 
           if (data.revealedCells !== undefined) {
             const cells = new Set<string>(data.revealedCells);
             revealedCellsRef.current = cells;
             setRevealedCells(cells);
+            setFogActive(true);
           }
 
           if (data.statsPublic !== undefined && data.tokenId) {
             setTokens(prev => prev.map(t => t.id === data.tokenId ? { ...t, statsPublic: data.statsPublic } : t));
-            setSelectedToken(prev => prev?.id === data.tokenId ? { ...prev, statsPublic: data.statsPublic } : prev);
+            setSelectedToken(prev => prev?.id === data.tokenId ? { ...prev, statsPublic: data.statsPublic } as Token : prev);
           }
 
           if (data.tokenAdded) {
@@ -401,20 +412,18 @@ function GamePage() {
     setInitiativeInput(selectedToken?.initiative ?? 0);
   }, [selectedToken?.id]);
 
-  // Učitaj tokene
   useEffect(() => {
     if (!sessionId) return;
     tokenService
       .getTokensBySession(sessionId)
       .then(setTokens)
-      .catch(() => toast.error("Greška pri učitavanju tokena"));
+      .catch(() => toast.error("Failed to load tokens"));
     diceService
       .getPublicHistory(sessionId)
       .then(setDiceHistory)
-      .catch(() => toast.error("Greška pri učitavanju istorije bacanja"));
+      .catch(() => toast.error("Failed to load dice history"));
   }, [sessionId]);
 
-  // Fetch session to get host role and auto-load active map
   useEffect(() => {
     if (!sessionId) return;
     sessionService.getSession(sessionId)
@@ -425,7 +434,6 @@ function GamePage() {
       .catch(() => {});
   }, [sessionId]);
 
-  // Canvas rendering sa kompletnim slojevima
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -435,13 +443,11 @@ function GamePage() {
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
 
-    // Pozadina
     ctx.fillStyle = "#0d0a06";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const GRID = 48 * zoom;
 
-    // SLOJ 1: Biom napredna tekstura
     if (activeMap) {
       const colors = BIOME_COLORS[activeMap.biome] || BIOME_COLORS.CAVE;
       for (let r = 0; r < activeMap.cellHeight; r++) {
@@ -452,7 +458,6 @@ function GamePage() {
           ctx.fillStyle = seed < 2 ? colors.alt : colors.base;
           ctx.fillRect(x, y, GRID, GRID);
 
-          // Renderovanje unutrašnjih detalja teksture bioma
           ctx.strokeStyle = colors.detail;
           ctx.lineWidth = 1;
           if (seed === 0) {
@@ -467,7 +472,6 @@ function GamePage() {
       }
     }
 
-    // SLOJ 2: Elementi podloge (Voda, Blato, Pesak)
     if (activeMapData) {
       if (Array.isArray(activeMapData.water)) {
         activeMapData.water.forEach(([c, r]) => {
@@ -486,7 +490,6 @@ function GamePage() {
       }
     }
 
-    // Mreža (Grid) preko podloge
     ctx.strokeStyle = activeMap ? (BIOME_COLORS[activeMap.biome]?.grid || "rgba(201,147,58,0.15)") : "rgba(201,147,58,0.15)";
     ctx.lineWidth = 0.5;
 
@@ -503,14 +506,12 @@ function GamePage() {
       ctx.stroke();
     }
 
-    // SLOJ 3: Zamke
     if (activeMapData && Array.isArray(activeMapData.traps)) {
       activeMapData.traps.forEach(([c, r]) => {
         drawProceduralTrap(ctx, c * GRID + pan.x, r * GRID + pan.y, GRID);
       });
     }
 
-    // SLOJ 4: Zidovi i Vrata
     if (activeMapData) {
       if (Array.isArray(activeMapData.walls)) {
         activeMapData.walls.forEach(([c, r]) => {
@@ -525,7 +526,6 @@ function GamePage() {
       }
     }
 
-    // SLOJ 5: Nameštaj (Stolovi, Stolice, Kovčezi)
     if (activeMapData) {
       if (Array.isArray(activeMapData.table)) {
         activeMapData.table.forEach(([c, r]) => {
@@ -544,7 +544,6 @@ function GamePage() {
       }
     }
 
-    // SLOJ 6: Drveće i Vatra
     if (activeMapData) {
       if (Array.isArray(activeMapData.fire)) {
         activeMapData.fire.forEach(([c, r]) => {
@@ -558,7 +557,6 @@ function GamePage() {
       }
     }
 
-    // SLOJ 7: Tokeni i interfejs selekcije
     if (Array.isArray(tokens)) {
       tokens.forEach((token) => {
         const tx = token.x * zoom + pan.x;
@@ -568,13 +566,11 @@ function GamePage() {
         const cy = ty + size / 2;
         const r = size / 2 - 2;
 
-        // Circle background
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fillStyle = token.enemy ? "#1a0808" : token.npc ? "#081a08" : "#080f1a";
         ctx.fill();
 
-        // Image or initial letter
         const cachedImg = token.imageUrl ? tokenImageCache.get(token.imageUrl) : undefined;
         const imgReady = !!(cachedImg?.complete && cachedImg.naturalWidth > 0);
 
@@ -603,7 +599,6 @@ function GamePage() {
           ctx.fillText(token.name[0].toUpperCase(), cx, cy);
         }
 
-        // Border (drawn after image so it's on top)
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.strokeStyle = token.enemy ? "#8b1a1a" : token.npc ? "#2d7a3a" : "#1b4d8e";
@@ -620,8 +615,7 @@ function GamePage() {
       });
     }
 
-    // SLOJ 8: Magla rata (Fog of War)
-    if (fogEnabled && activeMap) {
+    if ((fogEnabled || fogActive) && activeMap) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.88)';
       for (let r = 0; r < activeMap.cellHeight; r++) {
         for (let c = 0; c < activeMap.cellWidth; c++) {
@@ -631,7 +625,7 @@ function GamePage() {
         }
       }
     }
-  }, [tokens, zoom, pan, selectedToken, activeMapData, activeMap, openedDoors, imageVersion, fogEnabled, revealedCells]);
+  }, [tokens, zoom, pan, selectedToken, activeMapData, activeMap, openedDoors, imageVersion, fogEnabled, fogActive, revealedCells]);
 
   const handleRoll = async () => {
     if (!sessionId) return;
@@ -639,7 +633,7 @@ function GamePage() {
       const result = await diceService.roll(sessionId, formula);
       setDiceHistory((prev) => [result, ...prev.slice(0, 19)]);
     } catch {
-      toast.error("Greška pri bacanju kockice");
+      toast.error("Failed to roll dice");
     }
   };
 
@@ -734,7 +728,7 @@ function GamePage() {
       await applyMapToCanvas(mapId);
       setShowMapModal(false);
     } catch {
-      toast.error("Greška pri učitavanju mape");
+      toast.error("Failed to load map");
     }
   };
 
@@ -751,7 +745,7 @@ function GamePage() {
       setLibraryTokens(all.filter((t: Token) => !sessionTokenIds.has(t.id)));
       setShowAddTokenModal(true);
     } catch {
-      toast.error("Greška pri učitavanju biblioteke tokena");
+      toast.error("Failed to load token library");
     }
   };
 
@@ -768,7 +762,7 @@ function GamePage() {
         });
       }
     } catch {
-      toast.error("Greška pri dodavanju tokena u sesiju");
+      toast.error("Failed to add token to session");
     }
   };
 
@@ -824,7 +818,7 @@ function GamePage() {
     try {
       await tokenService.updateToken(selectedToken.id, { initiative: value });
     } catch {
-      toast.error("Greška pri postavljanju inicijative");
+      toast.error("Failed to set initiative");
     }
   };
 
@@ -850,7 +844,7 @@ function GamePage() {
         });
       }
     } catch {
-      toast.error("Greška pri ažuriranju HP-a");
+      toast.error("Failed to update HP");
     }
   };
 
@@ -867,7 +861,7 @@ function GamePage() {
         });
       }
     } catch {
-      toast.error("Greška pri promeni vidljivosti statistika");
+      toast.error("Failed to toggle stats visibility");
     }
   };
 
@@ -882,22 +876,13 @@ function GamePage() {
     try {
       await tokenService.updateToken(selectedToken.id, { statuses: newStatuses });
     } catch {
-      toast.error("Greška pri ažuriranju statusa");
+      toast.error("Failed to update status");
     }
   };
 
   const handleMouseUp = async () => {
     if (isFogPaintingRef.current) {
       isFogPaintingRef.current = false;
-      if (stompClientRef.current?.connected) {
-        stompClientRef.current.publish({
-          destination: "/app/fog",
-          body: JSON.stringify({
-            sessionId,
-            revealedCells: Array.from(revealedCellsRef.current),
-          }),
-        });
-      }
       return;
     }
     if (isPanningRef.current) {
@@ -925,7 +910,7 @@ function GamePage() {
         });
       }
     } catch {
-      toast.error("Greška pri pomjeranju tokena");
+      toast.error("Failed to move token");
     }
 
     dragTokenRef.current = null;
@@ -940,11 +925,11 @@ function GamePage() {
         background: "#0d0a06",
       }}
     >
-      {/* Header */}
       <div
         style={{
-          background: "#12100a",
-          borderBottom: "1px solid rgba(201,147,58,0.25)",
+          background: "linear-gradient(180deg, #161209 0%, #100d07 100%)",
+          borderBottom: "1px solid rgba(201,147,58,0.3)",
+          boxShadow: "0 4px 18px rgba(0,0,0,0.45)",
           display: "flex",
           alignItems: "center",
           padding: "0 16px",
@@ -954,15 +939,16 @@ function GamePage() {
         <span
           style={{
             color: "#c9933a",
-            fontFamily: "serif",
+            fontFamily: "'Cinzel', serif",
             fontWeight: 700,
             letterSpacing: "0.1em",
+            textShadow: "0 0 18px rgba(201,147,58,0.3)",
           }}
         >
           ⚔ DnD Battle Board
         </span>
         <span style={{ color: "rgba(244,237,216,0.45)", fontSize: "13px" }}>
-          Sesija: {sessionId?.slice(0, 8)}...
+          Session: {sessionId?.slice(0, 8)}...
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
           <button
@@ -971,7 +957,7 @@ function GamePage() {
           >
             +
           </button>
-          {isDM && <button onClick={handleOpenMapModal} style={btnStyle}>🗺 Mapa</button>}
+          {isDM && <button onClick={handleOpenMapModal} style={btnStyle}>🗺 Map</button>}
           {isDM && <button
             onClick={() => {
               setFogEnabled((f) => {
@@ -981,7 +967,7 @@ function GamePage() {
             }}
             style={{ ...fogBtnStyle, background: fogEnabled ? "rgba(30,55,90,0.7)" : undefined, borderColor: fogEnabled ? "rgba(60,110,180,0.6)" : undefined, color: fogEnabled ? "#7aaee0" : undefined }}
           >
-            🌫 Magla
+            🌫 Fog
           </button>}
           {isDM && fogEnabled && (
             <>
@@ -989,13 +975,13 @@ function GamePage() {
                 onClick={() => setFogBrushMode('reveal')}
                 style={{ ...fogBtnStyle, background: fogBrushMode === 'reveal' ? "rgba(30,70,45,0.7)" : undefined, borderColor: fogBrushMode === 'reveal' ? "rgba(60,160,90,0.6)" : undefined, color: fogBrushMode === 'reveal' ? "#7ecf96" : undefined }}
               >
-                Otkrij
+                Reveal
               </button>
               <button
                 onClick={() => setFogBrushMode('hide')}
                 style={{ ...fogBtnStyle, background: fogBrushMode === 'hide' ? "rgba(80,30,30,0.7)" : undefined, borderColor: fogBrushMode === 'hide' ? "rgba(180,60,60,0.6)" : undefined, color: fogBrushMode === 'hide' ? "#cf7e7e" : undefined }}
               >
-                Sakrij
+                Hide
               </button>
               <button
                 onClick={() => {
@@ -1006,23 +992,30 @@ function GamePage() {
                       all.add(`${c},${r}`);
                   revealedCellsRef.current = all;
                   setRevealedCells(all);
-                  if (stompClientRef.current?.connected)
-                    stompClientRef.current.publish({ destination: "/app/fog", body: JSON.stringify({ sessionId, revealedCells: Array.from(all) }) });
                 }}
                 style={fogBtnStyle}
               >
-                Sve otkrij
+                Reveal All
               </button>
               <button
                 onClick={() => {
                   revealedCellsRef.current = new Set();
                   setRevealedCells(new Set());
-                  if (stompClientRef.current?.connected)
-                    stompClientRef.current.publish({ destination: "/app/fog", body: JSON.stringify({ sessionId, revealedCells: [] }) });
                 }}
                 style={fogBtnStyle}
               >
-                Sve sakrij
+                Hide All
+              </button>
+              <button
+                onClick={() => {
+                  if (stompClientRef.current?.connected)
+                    stompClientRef.current.publish({ destination: "/app/fog", body: JSON.stringify({ sessionId, revealedCells: Array.from(revealedCellsRef.current) }) });
+                  setFogActive(true);
+                  toast.success("Fog saved");
+                }}
+                style={{ ...fogBtnStyle, background: "rgba(30,70,45,0.7)", borderColor: "rgba(60,160,90,0.6)", color: "#7ecf96" }}
+              >
+                💾 Save
               </button>
             </>
           )}
@@ -1046,7 +1039,6 @@ function GamePage() {
         </div>
       </div>
 
-      {/* Main area */}
       <div
         style={{
           display: "grid",
@@ -1054,7 +1046,6 @@ function GamePage() {
           overflow: "hidden",
         }}
       >
-        {/* Canvas */}
         <canvas
           ref={canvasRef}
           style={{ width: "100%", height: "100%", cursor: canvasCursor }}
@@ -1063,11 +1054,11 @@ function GamePage() {
           onMouseUp={handleMouseUp}
         />
 
-        {/* Desni panel - tokeni */}
         <div
           style={{
-            background: "#12100a",
+            background: "linear-gradient(180deg, #14110a 0%, #100d08 100%)",
             borderLeft: "1px solid rgba(201,147,58,0.25)",
+            boxShadow: "inset 8px 0 24px -16px rgba(0,0,0,0.6)",
             overflow: "auto",
             padding: "14px",
             display: "flex",
@@ -1077,8 +1068,8 @@ function GamePage() {
         >
           {tokens.some((t) => t.initiative > 0) && (
             <>
-              <div style={{ fontFamily: "serif", fontSize: "12px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em" }}>
-                INICIJATIVA
+              <div style={{ fontFamily: "'Cinzel', serif", fontWeight: 700, fontSize: "12px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em" }}>
+                ⚡ INITIATIVE
               </div>
               {[...tokens]
                 .filter((t) => t.initiative > 0)
@@ -1105,17 +1096,17 @@ function GamePage() {
                 })}
                 style={{ ...quickBtnStyle, padding: "4px", color: "#c9933a", borderColor: "rgba(201,147,58,0.4)", width: "100%" }}
               >
-                Sledeći →
+                Next →
               </button>
               <div style={{ borderTop: "1px solid rgba(201,147,58,0.15)" }} />
             </>
           )}
 
           <div style={{ display: "flex", alignItems: "center" }}>
-            <div style={{ fontFamily: "serif", fontSize: "12px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em", flex: 1 }}>
-              TOKENI U SESIJI
+            <div style={{ fontFamily: "'Cinzel', serif", fontWeight: 700, fontSize: "12px", color: "rgba(244,237,216,0.45)", letterSpacing: "0.1em", flex: 1 }}>
+              🛡 TOKENS IN SESSION
             </div>
-            <button onClick={handleOpenAddTokenModal} style={{ ...btnStyle, padding: "2px 8px", fontSize: "14px", lineHeight: 1 }} title="Dodaj token u sesiju">+</button>
+            <button onClick={handleOpenAddTokenModal} style={{ ...btnStyle, padding: "2px 8px", fontSize: "14px", lineHeight: 1 }} title="Add token to session">+</button>
           </div>
 
           {tokens.length === 0 ? (
@@ -1127,12 +1118,13 @@ function GamePage() {
                 marginTop: "24px",
               }}
             >
-              Nema tokena u sesiji
+              No tokens in session
             </p>
           ) : (
             tokens.map((token) => (
               <div
                 key={token.id}
+                className="ornate-row"
                 onClick={() => setSelectedToken(token)}
                 style={{
                   padding: "8px 10px",
@@ -1182,7 +1174,7 @@ function GamePage() {
                         HP: {token.hp}/{token.maxHp} · AC: {token.ac} · {token.enemy ? "Enemy" : token.npc ? "NPC" : "PC"}
                       </div>
                     ) : (
-                      <div style={{ fontSize: "11px", color: "rgba(244,237,216,0.25)", fontStyle: "italic" }}>statistike skrivene</div>
+                      <div style={{ fontSize: "11px", color: "rgba(244,237,216,0.25)", fontStyle: "italic" }}>stats hidden</div>
                     )}
                   </div>
                 </div>
@@ -1231,20 +1223,20 @@ function GamePage() {
                           onClick={(e) => { e.stopPropagation(); handleStatsVisibilityToggle(token); }}
                           style={{ ...quickBtnStyle, width: "100%", padding: "5px", color: token.statsPublic ? "#5cb85c" : "rgba(244,237,216,0.5)", borderColor: token.statsPublic ? "rgba(45,122,58,0.5)" : "rgba(201,147,58,0.25)" }}
                         >
-                          {token.statsPublic ? "✓ Statistike javne" : "Objavi statistike"}
+                          {token.statsPublic ? "✓ Stats public" : "Publish stats"}
                         </button>
                       </div>
                     )}
 
                     {!canControl(token) && (
                       <p style={{ fontSize: "12px", color: "rgba(244,237,216,0.3)", textAlign: "center", margin: "8px 0" }}>
-                        {canSeeStats(token) ? "Samo pregled" : "Statistike skrivene"}
+                        {canSeeStats(token) ? "View only" : "Stats hidden"}
                       </p>
                     )}
 
                     {canControl(token) && <>
                       <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "8px" }}>
-                        HP KONTROLE
+                        HP CONTROLS
                       </div>
                       <div style={{ display: "flex", gap: "4px", marginBottom: "6px" }}>
                         <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(-10); }} style={quickBtnStyle}>-10</button>
@@ -1260,7 +1252,7 @@ function GamePage() {
                           value={hpChange}
                           onChange={(e) => setHpChange(+e.target.value)}
                           onClick={(e) => e.stopPropagation()}
-                          placeholder="Vrednost"
+                          placeholder="Value"
                           style={{ flex: 1, background: "#0d0a06", border: "1px solid rgba(201,147,58,0.25)", borderRadius: "4px", padding: "6px 8px", color: "#f4edd8", fontSize: "13px", outline: "none" }}
                         />
                         <button onClick={(e) => { e.stopPropagation(); handleHpUpdate(-hpChange); setHpChange(0); }} style={{ ...quickBtnStyle, padding: "4px 8px" }}>DMG</button>
@@ -1271,12 +1263,12 @@ function GamePage() {
                         <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "8px" }}>INICIJATIVA</div>
                         <div style={{ display: "flex", gap: "4px" }}>
                           <input type="number" value={initiativeInput} onChange={(e) => setInitiativeInput(+e.target.value)} onClick={(e) => e.stopPropagation()} min={0} max={30} style={{ flex: 1, background: "#0d0a06", border: "1px solid rgba(201,147,58,0.25)", borderRadius: "4px", padding: "6px 8px", color: "#f4edd8", fontSize: "13px", outline: "none" }} />
-                          <button onClick={(e) => { e.stopPropagation(); handleInitiativeSet(initiativeInput); }} style={{ ...quickBtnStyle, padding: "4px 10px", color: "#c9933a", borderColor: "rgba(201,147,58,0.4)" }}>Postavi</button>
+                          <button onClick={(e) => { e.stopPropagation(); handleInitiativeSet(initiativeInput); }} style={{ ...quickBtnStyle, padding: "4px 10px", color: "#c9933a", borderColor: "rgba(201,147,58,0.4)" }}>Set</button>
                         </div>
                       </div>
 
                       <div style={{ marginTop: "10px", borderTop: "1px solid rgba(201,147,58,0.15)", paddingTop: "10px" }}>
-                        <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "8px" }}>STATUSI</div>
+                        <div style={{ fontSize: "12px", color: "rgba(244,237,216,0.45)", fontFamily: "serif", letterSpacing: "0.08em", marginBottom: "8px" }}>STATUSES</div>
                         {(selectedToken.statuses || []).length > 0 && (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
                             {(selectedToken.statuses || []).map(s => (
@@ -1314,12 +1306,12 @@ function GamePage() {
                                 });
                               }
                             } catch {
-                              toast.error("Greška pri uklanjanju tokena iz sesije");
+                              toast.error("Failed to remove token from session");
                             }
                           }}
                           style={{ ...quickBtnStyle, width: "100%", padding: "5px", color: "#c0392b", borderColor: "rgba(192,57,43,0.4)" }}
                         >
-                          Ukloni iz sesije
+                          Remove from session
                         </button>
                       </div>
                     </>}
@@ -1331,18 +1323,17 @@ function GamePage() {
         </div>
       </div>
 
-      {/* Bottom panel */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 280px",
-          borderTop: "1px solid rgba(201,147,58,0.25)",
+          borderTop: "1px solid rgba(201,147,58,0.3)",
+          boxShadow: "0 -4px 18px rgba(0,0,0,0.4)",
         }}
       >
-        {/* Dice log */}
         <div
           style={{
-            background: "#12100a",
+            background: "linear-gradient(0deg, #14110a 0%, #100d08 100%)",
             borderRight: "1px solid rgba(201,147,58,0.25)",
             overflow: "auto",
             padding: "8px 12px",
@@ -1350,18 +1341,20 @@ function GamePage() {
         >
           <div
             style={{
-              fontFamily: "serif",
+              fontFamily: "'Cinzel', serif",
+              fontWeight: 700,
               fontSize: "10px",
               color: "rgba(244,237,216,0.45)",
               letterSpacing: "0.1em",
               marginBottom: "8px",
             }}
           >
-            LOG BACANJA
+            🎲 ROLL LOG
           </div>
           {diceHistory.map((roll) => (
             <div
               key={roll.id}
+              className="ornate-fade"
               style={{
                 fontSize: "12px",
                 color: "#f4edd8",
@@ -1370,7 +1363,7 @@ function GamePage() {
               }}
             >
               <span style={{ color: "#c9933a" }}>{roll.ownerUsername}</span>
-              {" bacio "}
+              {" rolled "}
               <span style={{ color: "rgba(244,237,216,0.6)" }}>
                 {roll.formula}
               </span>
@@ -1391,7 +1384,6 @@ function GamePage() {
           ))}
         </div>
 
-        {/* Dice roller */}
         <div
           style={{
             background: "#12100a",
@@ -1465,7 +1457,7 @@ function GamePage() {
                 color: "#c0392b",
               }}
             >
-              Baci
+              Roll
             </button>
           </div>
         </div>
@@ -1474,11 +1466,11 @@ function GamePage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: '#12100a', border: '1px solid rgba(201,147,58,0.4)', borderRadius: '8px', padding: '24px', width: '420px', maxHeight: '80vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontFamily: 'serif', color: '#c9933a', fontSize: '16px', flex: 1 }}>Dodaj token u sesiju</h2>
+              <h2 style={{ fontFamily: 'serif', color: '#c9933a', fontSize: '16px', flex: 1 }}>Add Token to Session</h2>
               <button onClick={() => setShowAddTokenModal(false)} style={{ background: 'none', border: 'none', color: 'rgba(244,237,216,0.5)', fontSize: '16px', cursor: 'pointer' }}>✕</button>
             </div>
             {libraryTokens.length === 0 ? (
-              <p style={{ color: 'rgba(244,237,216,0.45)', textAlign: 'center', padding: '24px' }}>Svi tvoji tokeni su već u sesiji.</p>
+              <p style={{ color: 'rgba(244,237,216,0.45)', textAlign: 'center', padding: '24px' }}>All your tokens are already in this session.</p>
             ) : (
               libraryTokens.map(token => (
                 <div key={token.id} onClick={() => handleAddLibraryToken(token.id)} style={{ padding: '10px 12px', border: '1px solid rgba(201,147,58,0.2)', borderRadius: '4px', marginBottom: '6px', cursor: 'pointer', background: '#1e1a10', display: 'flex', alignItems: 'center', gap: '12px' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.6)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.2)')}>
@@ -1493,7 +1485,7 @@ function GamePage() {
                     <div style={{ fontFamily: 'serif', color: '#f5d485', fontSize: '14px' }}>{token.name}</div>
                     <div style={{ fontSize: '12px', color: 'rgba(244,237,216,0.45)' }}>HP: {token.maxHp} · AC: {token.ac} · {token.enemy ? 'Enemy' : token.npc ? 'NPC' : 'PC'}</div>
                   </div>
-                  <span style={{ color: '#c9933a', fontSize: '12px' }}>+ Dodaj</span>
+                  <span style={{ color: '#c9933a', fontSize: '12px' }}>+ Add</span>
                 </div>
               ))
             )}
@@ -1505,11 +1497,11 @@ function GamePage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: '#12100a', border: '1px solid rgba(201,147,58,0.4)', borderRadius: '8px', padding: '24px', width: '420px', maxHeight: '80vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontFamily: 'serif', color: '#c9933a', fontSize: '16px', flex: 1 }}>Izaberi mapu</h2>
+              <h2 style={{ fontFamily: 'serif', color: '#c9933a', fontSize: '16px', flex: 1 }}>Select Map</h2>
               <button onClick={() => setShowMapModal(false)} style={{ background: 'none', border: 'none', color: 'rgba(244,237,216,0.5)', fontSize: '16px', cursor: 'pointer' }}>✕</button>
             </div>
             {availableMaps.length === 0 ? (
-              <p style={{ color: 'rgba(244,237,216,0.45)', textAlign: 'center', padding: '24px' }}>Nemaš sačuvanih mapa.</p>
+              <p style={{ color: 'rgba(244,237,216,0.45)', textAlign: 'center', padding: '24px' }}>You have no saved maps.</p>
             ) : (
               availableMaps.map(map => (
                 <div key={map.id} onClick={() => handleLoadMap(map.id)} style={{ padding: '10px 12px', border: '1px solid rgba(201,147,58,0.2)', borderRadius: '4px', marginBottom: '6px', cursor: 'pointer', background: '#1e1a10', display: 'flex', alignItems: 'center', gap: '12px' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.6)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(201,147,58,0.2)')}>
@@ -1517,7 +1509,7 @@ function GamePage() {
                     <div style={{ fontFamily: 'serif', color: '#f5d485', fontSize: '14px' }}>{map.name}</div>
                     <div style={{ fontSize: '11px', color: 'rgba(244,237,216,0.45)' }}>{map.biome} · {map.cellWidth}×{map.cellHeight}</div>
                   </div>
-                  <span style={{ color: '#c9933a', fontSize: '12px' }}>Učitaj →</span>
+                  <span style={{ color: '#c9933a', fontSize: '12px' }}>Load →</span>
                 </div>
               ))
             )}

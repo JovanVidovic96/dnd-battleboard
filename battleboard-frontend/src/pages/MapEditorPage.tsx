@@ -44,6 +44,7 @@ const BIOME_COLORS: Record<string, { base: string; alt: string; grid: string; de
   DUNGEON:  { base: '#100a0a', alt: '#0a0606', grid: 'rgba(139,26,26,0.15)',  detail: '#1f1414' },
 };
 
+/** Tile-based map editor with 6-layer procedural biome rendering, tool-based cell painting, and pan/zoom controls. */
 function MapEditorPage() {
   const { mapId } = useParams<{ mapId: string }>();
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ function MapEditorPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [saved, setSaved] = useState(true);
   const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 50, y: 50 }); // Početni mali odmak da mapa ne bude zalepljena za ivicu
+  const [pan, setPan] = useState({ x: 50, y: 50 });
   const isPanningRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0 });
   const lastPanRef = useRef({ x: 0, y: 0 });
@@ -65,7 +66,7 @@ function MapEditorPage() {
 
   useEffect(() => {
     if (!mapId) {
-      setError('Nedostaje ID mape u URL-u');
+      setError('Missing map ID in URL');
       setLoading(false);
       return;
     }
@@ -77,17 +78,17 @@ function MapEditorPage() {
             const parsed = JSON.parse(m.mapData);
             setMapData({ ...INITIAL_MAP_DATA, ...parsed });
           } catch {
-            toast.error("Greška pri učitavanju podataka mape");
+            toast.error("Failed to load map data");
           }
         }
         if (!m.cellWidth || !m.cellHeight || m.cellWidth <= 0 || m.cellHeight <= 0) {
-          setError(`Mapa ima neispravne dimenzije: ${m.cellWidth} x ${m.cellHeight}`);
+          setError(`Map has invalid dimensions: ${m.cellWidth} x ${m.cellHeight}`);
         }
         setLoading(false);
       })
       .catch((err) => {
-        toast.error("Greška pri učitavanju mape");
-        setError(err.message || 'Neuspješno učitavanje mape');
+        toast.error("Failed to load map");
+        setError(err.message || 'Failed to load map');
         setLoading(false);
       });
   }, [mapId]);
@@ -111,14 +112,13 @@ function MapEditorPage() {
       ctx.fillStyle = '#c9933a';
       ctx.font = '16px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(error || 'Nema podataka o mapi', w/2, h/2);
+      ctx.fillText(error || 'No map data', w/2, h/2);
       return;
     }
 
     const colors = BIOME_COLORS[map.biome] || BIOME_COLORS.CAVE;
     const GS = GRID * zoom;
 
-    // --- SLOJ 1: Teksturisana pozadina biomu ---
     for (let r = 0; r < map.cellHeight; r++) {
       for (let c = 0; c < map.cellWidth; c++) {
         const x = c * GS + pan.x;
@@ -127,11 +127,9 @@ function MapEditorPage() {
         const seed = (r * 7 + c * 13) % 7;
         const subSeed = (r * 11 + c * 19) % 4;
 
-        // Baza
         ctx.fillStyle = seed < 3 ? colors.base : colors.alt;
         ctx.fillRect(x, y, GS, GS);
 
-        // Teksturisanje na osnovu specifičnog bioma
         ctx.strokeStyle = colors.detail;
         ctx.fillStyle = colors.detail;
         ctx.lineWidth = Math.max(0.5, zoom);
@@ -188,7 +186,6 @@ function MapEditorPage() {
       }
     }
 
-    // --- SLOJ 2: Terenski elementi (Pesak, Blato, Voda) ---
     mapData.sand?.forEach(([c, r]) => {
       const x = c * GS + pan.x, y = r * GS + pan.y;
       ctx.fillStyle = '#e2c98a';
@@ -229,7 +226,6 @@ function MapEditorPage() {
       ctx.restore();
     });
 
-    // --- SLOJ 3: Mreža (Grid) ---
     ctx.strokeStyle = colors.grid;
     ctx.lineWidth = 0.5;
     for (let c = 0; c <= map.cellWidth; c++) {
@@ -241,7 +237,6 @@ function MapEditorPage() {
       ctx.beginPath(); ctx.moveTo(pan.x, y); ctx.lineTo(map.cellWidth * GS + pan.x, y); ctx.stroke();
     }
 
-    // --- SLOJ 4: Strukture (Zidovi, Vrata) ---
     mapData.walls.forEach(([c, r]) => {
       const x = c * GS + pan.x, y = r * GS + pan.y;
       ctx.fillStyle = '#2c1e15';
@@ -266,7 +261,6 @@ function MapEditorPage() {
       ctx.beginPath(); ctx.arc(x + GS*0.5, y + GS*0.5, GS*0.08, 0, Math.PI*2); ctx.fill();
     });
 
-    // --- SLOJ 5: Nameštaj i Kovčezi ---
     mapData.table?.forEach(([c, r]) => {
       const x = c * GS + pan.x, y = r * GS + pan.y;
       ctx.fillStyle = '#a0522d';
@@ -299,7 +293,6 @@ function MapEditorPage() {
       ctx.fillRect(x + GS*0.42, y + GS*0.4, GS*0.16, GS*0.2);
     });
 
-    // --- SLOJ 6: Opasnosti, Efekti i Krošnje ---
     mapData.traps.forEach(([c, r]) => {
       const x = c * GS + pan.x, y = r * GS + pan.y;
       ctx.fillStyle = 'rgba(192, 57, 43, 0.8)';
@@ -385,9 +378,11 @@ function MapEditorPage() {
     setSaved(false);
   };
 
-  // --- POPRAVLJENE KONTROLE ZA PANINOVANJE (POMERANJE) MAPE ---
+  /**
+   * Handles pan initiation on right-click, middle-click, or Alt+left-click.
+   * Plain left-click activates the active draw tool on the hovered cell.
+   */
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Pomeranje radi na: Desni klik (button 2), Srednji klik/Točkić (button 1) ili Alt + Levi klik
     if (e.button === 2 || e.button === 1 || e.altKey) {
       e.preventDefault();
       isPanningRef.current = true;
@@ -396,7 +391,6 @@ function MapEditorPage() {
       return;
     }
 
-    // Levi klik aktivira crtanje alatom
     if (e.button === 0) {
       setIsDrawing(true);
       const cell = getCellFromEvent(e);
@@ -406,7 +400,6 @@ function MapEditorPage() {
 
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isPanningRef.current) {
-      // Izračunaj pomeraj i ukloni restrikcije granica kako bi korisnik mogao slobodno "skrolovati" u stranu
       setPan({
         x: lastPanRef.current.x + e.clientX - panStartRef.current.x,
         y: lastPanRef.current.y + e.clientY - panStartRef.current.y
@@ -443,36 +436,36 @@ function MapEditorPage() {
       });
       setSaved(true);
     } catch {
-      toast.error("Greška pri čuvanju mape");
+      toast.error("Failed to save map");
     }
   };
 
   const handleClear = () => {
-    if(window.confirm("Da li ste sigurni da želite očistiti cijelu mapu?")) {
+    if(window.confirm("Are you sure you want to clear the entire map?")) {
       setMapData(INITIAL_MAP_DATA);
       setSaved(false);
     }
   };
 
   const TOOLS = [
-    { id: 'wall', label: '⬛ Zid', color: '#2c1e15' },
-    { id: 'door', label: '🚪 Vrata', color: '#8b5a2b' },
-    { id: 'trap', label: '✕ Zamka', color: '#c0392b' },
-    { id: 'water', label: '💧 Voda', color: '#2980b9' },
-    { id: 'mud', label: '🟫 Blato', color: '#4a3319' },
-    { id: 'sand', label: '⏳ Pesak', color: '#e2c98a' },
-    { id: 'fire', label: '🔥 Vatra', color: '#e67e22' },
-    { id: 'tree', label: '🌳 Drvo', color: '#28a745' },
-    { id: 'chest', label: '📦 Kovčeg', color: '#5c3a1a' },
-    { id: 'table', label: '🟨 Sto', color: '#a0522d' },
-    { id: 'chair', label: '🪑 Stolica', color: '#cd853f' },
-    { id: 'erase', label: '✦ Briši', color: '#555' },
+    { id: 'wall', label: '⬛ Wall', color: '#2c1e15' },
+    { id: 'door', label: '🚪 Door', color: '#8b5a2b' },
+    { id: 'trap', label: '✕ Trap', color: '#c0392b' },
+    { id: 'water', label: '💧 Water', color: '#2980b9' },
+    { id: 'mud', label: '🟫 Mud', color: '#4a3319' },
+    { id: 'sand', label: '⏳ Sand', color: '#e2c98a' },
+    { id: 'fire', label: '🔥 Fire', color: '#e67e22' },
+    { id: 'tree', label: '🌳 Tree', color: '#28a745' },
+    { id: 'chest', label: '📦 Chest', color: '#5c3a1a' },
+    { id: 'table', label: '🟨 Table', color: '#a0522d' },
+    { id: 'chair', label: '🪑 Chair', color: '#cd853f' },
+    { id: 'erase', label: '✦ Erase', color: '#555' },
   ];
 
   if (loading) {
     return (
       <div style={{ height: '100vh', background: '#0d0a06', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ color: '#c9933a', fontSize: '18px', fontFamily: 'serif' }}>⏳ Učitavanje mape...</div>
+        <div style={{ color: '#c9933a', fontSize: '18px', fontFamily: 'serif' }}>⏳ Loading map...</div>
       </div>
     );
   }
@@ -481,21 +474,21 @@ function MapEditorPage() {
     return (
       <div style={{ height: '100vh', background: '#0d0a06', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ color: '#c0392b', fontSize: '18px', fontFamily: 'monospace', marginBottom: '20px', textAlign: 'center', maxWidth: '80%' }}>
-          ⚠️ Greška: {error}
+          ⚠️ Error: {error}
         </div>
-        <button onClick={() => navigate('/lobby')} style={hBtnStyle}>← Povratak u Lobby</button>
+        <button onClick={() => navigate('/lobby')} style={hBtnStyle}>← Back to Lobby</button>
       </div>
     );
   }
 
   return (
     <div style={{ height: '100vh', background: '#0d0a06', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
-      <div style={{ background: '#12100a', borderBottom: '1px solid rgba(201,147,58,0.25)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', padding: '8px 16px', gap: '12px' }}>
-        <span style={{ color: '#c9933a', fontFamily: 'serif', fontWeight: 700, letterSpacing: '0.1em' }}>⚔ Map Editor</span>
+      <div style={{ background: 'linear-gradient(180deg, #161209 0%, #100d07 100%)', borderBottom: '1px solid rgba(201,147,58,0.3)', boxShadow: '0 4px 18px rgba(0,0,0,0.45)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', padding: '8px 16px', gap: '12px' }}>
+        <span style={{ color: '#c9933a', fontFamily: "'Cinzel', serif", fontWeight: 700, letterSpacing: '0.1em', textShadow: '0 0 18px rgba(201,147,58,0.3)' }}>⚔ Map Editor</span>
         <span style={{ color: 'rgba(244,237,216,0.45)', fontSize: '13px' }}>{map?.name}</span>
-        <span style={{ fontSize: '11px', color: map?.biome ? '#c9933a' : '#555', fontFamily: 'serif', background: 'rgba(201,147,58,0.05)', padding: '2px 6px', borderRadius: '3px' }}>{map?.biome}</span>
+        <span style={{ fontSize: '11px', color: map?.biome ? '#c9933a' : '#555', fontFamily: 'serif', background: 'rgba(201,147,58,0.08)', border: '1px solid rgba(201,147,58,0.2)', padding: '2px 8px', borderRadius: '10px' }}>{map?.biome}</span>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginLeft: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginLeft: '8px', paddingLeft: '12px', borderLeft: '1px solid rgba(201,147,58,0.15)' }}>
           {TOOLS.map(t => (
             <button
               key={t.id}
@@ -509,6 +502,7 @@ function MapEditorPage() {
                 fontSize: '12px',
                 cursor: 'pointer',
                 fontFamily: 'serif',
+                boxShadow: tool === t.id ? '0 0 10px rgba(201,147,58,0.35)' : 'none',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -524,9 +518,9 @@ function MapEditorPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={handleClear} style={{ ...hBtnStyle, color: '#c0392b', borderColor: 'rgba(192,57,43,0.4)' }}>Očisti</button>
+          <button onClick={handleClear} style={{ ...hBtnStyle, color: '#c0392b', borderColor: 'rgba(192,57,43,0.4)' }}>Clear</button>
           <button onClick={handleSave} style={{ ...hBtnStyle, background: saved ? 'rgba(45,122,58,0.15)' : 'rgba(201,147,58,0.2)', borderColor: saved ? 'rgba(45,122,58,0.4)' : 'rgba(201,147,58,0.6)', color: saved ? '#2d7a3a' : '#f5d485' }}>
-            {saved ? '✓ Sačuvano' : 'Sačuvaj'}
+            {saved ? '✓ Saved' : 'Save'}
           </button>
           <button onClick={() => navigate('/lobby')} style={hBtnStyle}>← Lobby</button>
         </div>

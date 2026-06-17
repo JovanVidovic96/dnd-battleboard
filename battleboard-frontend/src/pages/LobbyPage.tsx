@@ -9,6 +9,7 @@ import { uploadService } from "../services/uploadService";
 import { toast } from "../utils/toast";
 import type { GameMap } from "../types";
 
+/** Pre-game lobby for creating and joining sessions, managing the token library, and managing saved maps. */
 function LobbyPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [newSessionName, setNewSessionName] = useState("");
@@ -43,13 +44,13 @@ function LobbyPage() {
       const data = await sessionService.getMysessions();
       setSessions(data);
     } catch {
-      toast.error("Greška pri učitavanju sesija");
+      toast.error("Failed to load sessions");
     }
   };
   useEffect(() => {
     loadSessions();
-    tokenService.getMyTokens().then(setMyTokens).catch(() => toast.error("Greška pri učitavanju tokena"));
-    mapService.getMaps().then(setMyMaps).catch(() => toast.error("Greška pri učitavanju mapa"));
+    tokenService.getMyTokens().then(setMyTokens).catch(() => toast.error("Failed to load tokens"));
+    mapService.getMaps().then(setMyMaps).catch(() => toast.error("Failed to load maps"));
   }, []);
 
   const handleCreateSession = async () => {
@@ -60,7 +61,7 @@ function LobbyPage() {
       setShowCreate(false);
       loadSessions();
     } catch {
-      toast.error("Greška pri kreiranju sesije");
+      toast.error("Failed to create session");
     }
   };
 
@@ -70,7 +71,7 @@ function LobbyPage() {
       const session = await sessionService.joinSession(inviteCode);
       navigate(`/game/${session.id}`);
     } catch {
-      toast.error("Greška pri pridruživanju sesiji");
+      toast.error("Failed to join session");
     }
   };
 
@@ -91,16 +92,16 @@ function LobbyPage() {
         height: 1,
       });
     } catch {
-      toast.error("Greška pri kreiranju tokena");
+      toast.error("Failed to create token");
     }
   };
 
   const handleAddToSession = async (tokenId: string, sessionId: string) => {
     try {
       await tokenService.updateToken(tokenId, { sessionId });
-      toast.success("Token dodat u sesiju!");
+      toast.success("Token added to session!");
     } catch {
-      toast.error("Greška pri dodavanju tokena u sesiju");
+      toast.error("Failed to add token to session");
     }
   };
 
@@ -109,7 +110,7 @@ function LobbyPage() {
       await tokenService.deleteToken(tokenId);
       setMyTokens((prev) => prev.filter((t) => t.id !== tokenId));
     } catch {
-      toast.error("Greška pri brisanju tokena");
+      toast.error("Failed to delete token");
     }
   };
 
@@ -118,7 +119,16 @@ function LobbyPage() {
       await sessionService.deleteSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch {
-      toast.error("Greška pri brisanju sesije");
+      toast.error("Failed to delete session");
+    }
+  };
+
+  const handleToggleActive = async (sessionId: string, currentActive: boolean) => {
+    try {
+      await sessionService.setActive(sessionId, !currentActive);
+      setSessions((prev) => prev.map((s) => s.id === sessionId ? { ...s, active: !currentActive } : s));
+    } catch {
+      toast.error("Failed to update session status");
     }
   };
 
@@ -137,7 +147,7 @@ function LobbyPage() {
         cellHeight: 16,
       });
     } catch {
-      toast.error("Greška pri kreiranju mape");
+      toast.error("Failed to create map");
     }
   };
 
@@ -146,7 +156,7 @@ function LobbyPage() {
       await mapService.deleteMap(mapId);
       setMyMaps((prev) => prev.filter((m) => m.id !== mapId));
     } catch {
-      toast.error("Greška pri brisanju mape");
+      toast.error("Failed to delete map");
     }
   };
 
@@ -156,43 +166,44 @@ function LobbyPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0d0a06", padding: "0" }}>
-      {/* ===== HEADER ===== */}
+    <div style={{ minHeight: "100vh", background: "radial-gradient(ellipse at 80% 0%, rgba(20,12,45,0.8) 0%, transparent 55%), radial-gradient(ellipse at 15% 100%, rgba(60,15,15,0.5) 0%, transparent 50%), #0a0806", padding: "0" }}>
       <div
         style={{
-          background: "#12100a",
-          borderBottom: "1px solid rgba(201,147,58,0.25)",
-          padding: "12px 24px",
+          background: "linear-gradient(180deg, #161209 0%, #100d07 100%)",
+          borderBottom: "1px solid rgba(201,147,58,0.3)",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
+          padding: "14px 24px",
           display: "flex",
           alignItems: "center",
           gap: "16px",
         }}
       >
         <h1
+          className="gold-glow"
           style={{
             color: "#c9933a",
-            fontFamily: "serif",
+            fontFamily: "'Cinzel', serif",
+            fontWeight: 700,
             fontSize: "1.4rem",
             letterSpacing: "0.1em",
             flex: 1,
           }}
         >
-          DnD Battle Board
+          ⚔ DnD Battle Board
         </h1>
         <span style={{ color: "#f4edd8", fontSize: "14px" }}>
-          {authService.getUsername()}
+          👤 {authService.getUsername()}
         </span>
         <button onClick={handleLogout} style={dangerButtonStyle}>
-          Odjavi se
+          Logout
         </button>
       </div>
 
       <div
         style={{ maxWidth: "800px", margin: "0 auto", padding: "32px 24px" }}
       >
-        {/* ===== PRIDRUZI SE SESIJI ===== */}
-        <div style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Pridruži se sesiji</h2>
+        <div className="ornate-card ornate-fade" style={{ ...cardStyle, animationDelay: '0s' }}>
+          <h2 style={sectionTitleStyle}>🔑 Join Session</h2>
           <div style={{ display: "flex", gap: "8px" }}>
             <input
               placeholder="Invite code (npr. A3F9K2B1)"
@@ -202,13 +213,12 @@ function LobbyPage() {
               style={{ ...inputStyle, flex: 1 }}
             />
             <button onClick={handleJoinSession} style={buttonStyle}>
-              Pridruži se
+              Join
             </button>
           </div>
         </div>
 
-        {/* ===== MOJE SESIJE ===== */}
-        <div style={cardStyle}>
+        <div className="ornate-card ornate-fade" style={{ ...cardStyle, animationDelay: '0.1s' }}>
           <div
             style={{
               display: "flex",
@@ -217,21 +227,20 @@ function LobbyPage() {
             }}
           >
             <h2 style={{ ...sectionTitleStyle, marginBottom: 0, flex: 1 }}>
-              Moje sesije
+              🏰 My Sessions
             </h2>
             <button
               onClick={() => setShowCreate(!showCreate)}
               style={buttonStyle}
             >
-              + Nova sesija
+              + New Session
             </button>
           </div>
 
-          {/* FORMA ZA KREIRANJE SESIJE */}
           {showCreate && (
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+            <div className="slide-down" style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
               <input
-                placeholder="Naziv sesije"
+                placeholder="Session name"
                 value={newSessionName}
                 onChange={(e) => setNewSessionName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCreateSession()}
@@ -243,7 +252,6 @@ function LobbyPage() {
             </div>
           )}
 
-          {/* LISTA SESIJA */}
           {sessions.length === 0 ? (
             <p
               style={{
@@ -253,12 +261,11 @@ function LobbyPage() {
                 padding: "24px",
               }}
             >
-              Nemaš aktivnih sesija. Kreiraj novu!
+              No active sessions. Create one!
             </p>
           ) : (
             sessions.map((session) => (
-              <div key={session.id} style={sessionRowStyle}>
-                {/* INFO O SESIJI */}
+              <div key={session.id} className="ornate-row" style={sessionRowStyle}>
                 <div style={{ flex: 1 }}>
                   <div
                     style={{
@@ -282,26 +289,31 @@ function LobbyPage() {
                       {session.inviteCode}
                     </span>
                     {" · "}
-                    {session.playerCount} igrača
+                    {session.playerCount} players
                   </div>
                 </div>
-                {/* DUGMAD ZA SESIJU */}
                 <div
                   style={{ display: "flex", gap: "6px", alignItems: "center" }}
                 >
-                  <div
+                  <button
+                    onClick={() => handleToggleActive(session.id, session.active)}
+                    className={session.active ? "active-pulse" : undefined}
                     style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: session.active ? "#2d7a3a" : "#555",
+                      ...buttonStyle,
+                      fontSize: "11px",
+                      padding: "4px 10px",
+                      color: session.active ? "#2d7a3a" : "#555",
+                      borderColor: session.active ? "rgba(45,122,58,0.5)" : "rgba(100,100,100,0.4)",
+                      background: session.active ? "rgba(45,122,58,0.1)" : "rgba(50,50,50,0.2)",
                     }}
-                  />
+                  >
+                    {session.active ? "● Active" : "○ Inactive"}
+                  </button>
                   <button
                     onClick={() => navigate(`/game/${session.id}`)}
                     style={buttonStyle}
                   >
-                    Otvori
+                    Open
                   </button>
                   <button
                     onClick={() => handleDeleteSession(session.id)}
@@ -312,7 +324,7 @@ function LobbyPage() {
                       padding: "4px 10px",
                     }}
                   >
-                    Obriši
+                    Delete
                   </button>
                 </div>
               </div>
@@ -320,8 +332,7 @@ function LobbyPage() {
           )}
         </div>
 
-        {/* ===== TOKEN LIBRARY ===== */}
-        <div style={cardStyle}>
+        <div className="ornate-card ornate-fade" style={{ ...cardStyle, animationDelay: '0.2s' }}>
           <div
             style={{
               display: "flex",
@@ -330,18 +341,19 @@ function LobbyPage() {
             }}
           >
             <h2 style={{ ...sectionTitleStyle, marginBottom: 0, flex: 1 }}>
-              Moji tokeni
+              🛡 My Tokens
             </h2>
             <button
               onClick={() => setShowTokenForm(!showTokenForm)}
               style={buttonStyle}
             >
-              + Novi token
+              + New Token
             </button>
           </div>
 
           {showTokenForm && (
             <div
+              className="slide-down"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -354,7 +366,7 @@ function LobbyPage() {
               }}
             >
               <input
-                placeholder="Ime tokena"
+                placeholder="Token name"
                 value={newToken.name}
                 onChange={(e) =>
                   setNewToken((p) => ({ ...p, name: e.target.value }))
@@ -402,7 +414,7 @@ function LobbyPage() {
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: "11px", color: "rgba(244,237,216,0.45)", marginBottom: "6px" }}>Tip tokena</div>
+                <div style={{ fontSize: "11px", color: "rgba(244,237,216,0.45)", marginBottom: "6px" }}>Token type</div>
                 <div style={{ display: "flex", gap: "6px" }}>
                   {([
                     { label: "PC", isNpc: false, enemy: false, activeColor: "#7aaee0", activeBorder: "rgba(27,77,142,0.8)", activeBg: "rgba(27,77,142,0.2)" },
@@ -431,7 +443,7 @@ function LobbyPage() {
               </div>
               <div>
                 <div style={{ fontSize: "11px", color: "rgba(244,237,216,0.45)", marginBottom: "4px" }}>
-                  Slika tokena
+                  Token image
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   {newToken.imageUrl && (
@@ -455,7 +467,7 @@ function LobbyPage() {
                         const url = await uploadService.uploadImage(file);
                         setNewToken((p) => ({ ...p, imageUrl: url }));
                       } catch {
-                        toast.error("Greška pri uploadu slike");
+                        toast.error("Failed to upload image");
                       }
                     }}
                     style={{ ...inputStyle, padding: "4px 8px", fontSize: "12px", flex: 1 }}
@@ -464,13 +476,13 @@ function LobbyPage() {
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button onClick={handleCreateToken} style={buttonStyle}>
-                  Kreiraj
+                  Create
                 </button>
                 <button
                   onClick={() => setShowTokenForm(false)}
                   style={{ ...buttonStyle, color: "#c0392b" }}
                 >
-                  Otkaži
+                  Cancel
                 </button>
               </div>
             </div>
@@ -485,11 +497,11 @@ function LobbyPage() {
                 padding: "24px",
               }}
             >
-              Nemaš sačuvanih tokena. Kreiraj novi!
+              No saved tokens. Create one!
             </p>
           ) : (
             myTokens.map((token) => (
-              <div key={token.id} style={sessionRowStyle}>
+              <div key={token.id} className="ornate-row" style={sessionRowStyle}>
                 {token.imageUrl ? (
                   <img
                     src={token.imageUrl}
@@ -563,7 +575,7 @@ function LobbyPage() {
                       padding: "4px 10px",
                     }}
                   >
-                    Obriši
+                    Delete
                   </button>
                 </div>
               </div>
@@ -571,8 +583,7 @@ function LobbyPage() {
           )}
         </div>
 
-        {/* ===== MOJE MAPE ===== */}
-        <div style={cardStyle}>
+        <div className="ornate-card ornate-fade" style={{ ...cardStyle, animationDelay: '0.3s' }}>
           <div
             style={{
               display: "flex",
@@ -581,18 +592,19 @@ function LobbyPage() {
             }}
           >
             <h2 style={{ ...sectionTitleStyle, marginBottom: 0, flex: 1 }}>
-              Moje mape
+              🗺 My Maps
             </h2>
             <button
               onClick={() => setShowMapForm(!showMapForm)}
               style={buttonStyle}
             >
-              + Nova mapa
+              + New Map
             </button>
           </div>
 
           {showMapForm && (
             <div
+              className="slide-down"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -605,7 +617,7 @@ function LobbyPage() {
               }}
             >
               <input
-                placeholder="Naziv mape"
+                placeholder="Map name"
                 value={newMap.name}
                 onChange={(e) =>
                   setNewMap((p) => ({ ...p, name: e.target.value }))
@@ -620,7 +632,7 @@ function LobbyPage() {
                     marginBottom: "4px",
                   }}
                 >
-                  Biom
+                  Biome
                 </div>
                 <select
                   value={newMap.biome}
@@ -629,13 +641,13 @@ function LobbyPage() {
                   }
                   style={{ ...inputStyle, width: "100%" }}
                 >
-                  <option value="CAVE">Pećina</option>
-                  <option value="FOREST">Šuma</option>
-                  <option value="OCEAN">Okean</option>
-                  <option value="DESERT">Pustinja</option>
-                  <option value="MOUNTAIN">Planina</option>
-                  <option value="CITY">Grad</option>
-                  <option value="DUNGEON">Tamnica</option>
+                  <option value="CAVE">Cave</option>
+                  <option value="FOREST">Forest</option>
+                  <option value="OCEAN">Ocean</option>
+                  <option value="DESERT">Desert</option>
+                  <option value="MOUNTAIN">Mountain</option>
+                  <option value="CITY">City</option>
+                  <option value="DUNGEON">Dungeon</option>
                 </select>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
@@ -647,7 +659,7 @@ function LobbyPage() {
                       marginBottom: "4px",
                     }}
                   >
-                    Širina (ćelije)
+                    Width (cells)
                   </div>
                   <input
                     type="number"
@@ -666,7 +678,7 @@ function LobbyPage() {
                       marginBottom: "4px",
                     }}
                   >
-                    Visina (ćelije)
+                    Height (cells)
                   </div>
                   <input
                     type="number"
@@ -680,13 +692,13 @@ function LobbyPage() {
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button onClick={handleCreateMap} style={buttonStyle}>
-                  Kreiraj
+                  Create
                 </button>
                 <button
                   onClick={() => setShowMapForm(false)}
                   style={{ ...buttonStyle, color: "#c0392b" }}
                 >
-                  Otkaži
+                  Cancel
                 </button>
               </div>
             </div>
@@ -701,11 +713,11 @@ function LobbyPage() {
                 padding: "24px",
               }}
             >
-              Nemaš sačuvanih mapa. Kreiraj novu!
+              No saved maps. Create one!
             </p>
           ) : (
             myMaps.map((map) => (
-              <div key={map.id} style={sessionRowStyle}>
+              <div key={map.id} className="ornate-row" style={sessionRowStyle}>
                 <div style={{ flex: 1 }}>
                   <div
                     style={{
@@ -722,7 +734,7 @@ function LobbyPage() {
                       color: "rgba(244,237,216,0.45)",
                     }}
                   >
-                    {map.biome} · {map.cellWidth}×{map.cellHeight} ćelija
+                    {map.biome} · {map.cellWidth}×{map.cellHeight} cells
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
@@ -730,13 +742,13 @@ function LobbyPage() {
                     onClick={() => navigate(`/map-editor/${map.id}`)}
                     style={buttonStyle}
                   >
-                    Uredi
+                    Edit
                   </button>
                   <button
                     onClick={() => handleDeleteMap(map.id)}
                     style={{ ...buttonStyle, color: "#c0392b" }}
                   >
-                    Obriši
+                    Delete
                   </button>
                 </div>
               </div>
@@ -749,15 +761,17 @@ function LobbyPage() {
 }
 
 const cardStyle: React.CSSProperties = {
-  background: "#12100a",
+  background: "linear-gradient(180deg, #14110a 0%, #100d08 100%)",
   border: "1px solid rgba(201,147,58,0.25)",
-  borderRadius: "8px",
+  borderRadius: "10px",
   padding: "20px 24px",
-  marginBottom: "16px",
+  marginBottom: "18px",
+  boxShadow: "0 4px 18px rgba(0,0,0,0.4), inset 0 1px 0 rgba(201,147,58,0.05)",
 };
 
 const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: "serif",
+  fontFamily: "'Cinzel', serif",
+  fontWeight: 700,
   fontSize: "1rem",
   color: "#c9933a",
   letterSpacing: "0.08em",

@@ -1,11 +1,194 @@
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Cinzel+Decorative:wght@700&display=swap");
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     font-family: "Georgia", serif;
     background: #0d0a06;
     color: #f4edd8;
+}
+
+button {
+    transition: transform 0.08s ease, opacity 0.08s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+button:hover {
+    filter: brightness(1.15);
+}
+
+button:active {
+    transform: scale(0.93);
+    opacity: 0.8;
+}
+
+/* Themed scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: #0d0a06;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(201, 147, 58, 0.35);
+    border-radius: 6px;
+    border: 2px solid #0d0a06;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(201, 147, 58, 0.6);
+}
+* {
+    scrollbar-color: rgba(201, 147, 58, 0.35) #0d0a06;
+    scrollbar-width: thin;
+}
+
+@keyframes fadeRise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ornate-fade {
+    animation: fadeRise 0.35s ease both;
+}
+
+.ornate-card {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.ornate-card:hover {
+    border-color: rgba(201, 147, 58, 0.55) !important;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(201, 147, 58, 0.08);
+}
+
+.ornate-row {
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.ornate-row:hover {
+    border-color: rgba(201, 147, 58, 0.4) !important;
+    background: #241f12 !important;
+    transform: translateX(2px);
+}
+
+.ornate-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(201, 147, 58, 0.4);
+    margin: 4px 0 14px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+}
+
+.ornate-divider::before,
+.ornate-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to var(--dir, right), transparent, rgba(201, 147, 58, 0.35), transparent);
+}
+
+/* ============================================================
+   KEYFRAMES
+   ============================================================ */
+
+@keyframes twinkle {
+    0%, 100% { opacity: var(--op, 0.8); }
+    50%       { opacity: calc(var(--op, 0.8) * 0.1); }
+}
+
+@keyframes flicker {
+    0%, 100% { opacity: var(--fl, 0.55); }
+    10%  { opacity: calc(var(--fl, 0.55) * 0.65); }
+    25%  { opacity: calc(var(--fl, 0.55) * 1.18); }
+    40%  { opacity: calc(var(--fl, 0.55) * 0.72); }
+    58%  { opacity: calc(var(--fl, 0.55) * 1.10); }
+    72%  { opacity: calc(var(--fl, 0.55) * 0.55); }
+    88%  { opacity: calc(var(--fl, 0.55) * 0.92); }
+}
+
+@keyframes moonPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+
+@keyframes dragonFloat {
+    0%, 100% { transform: translate(0px,  0px) rotate(0deg); }
+    33%      { transform: translate(-7px, -10px) rotate(1.5deg); }
+    66%      { transform: translate(5px,  -5px) rotate(-1deg); }
+}
+
+@keyframes flagWave {
+    0%, 100% { transform: skewX(0deg) scaleX(1); }
+    30%      { transform: skewX(6deg) scaleX(1.04); }
+    70%      { transform: skewX(-3deg) scaleX(0.97); }
+}
+
+@keyframes goldGlow {
+    0%, 100% { text-shadow: 0 0 28px rgba(201,147,58,0.45), 0 2px 6px rgba(0,0,0,0.9); }
+    50%       { text-shadow: 0 0 64px rgba(201,147,58,0.9), 0 0 100px rgba(201,147,58,0.22), 0 2px 6px rgba(0,0,0,0.9); }
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes activeGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(45,122,58,0); }
+    50%       { box-shadow: 0 0 10px 2px rgba(45,122,58,0.45); }
+}
+
+@keyframes toastSlideIn {
+    from { opacity: 0; transform: translateX(48px) scale(0.95); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* ============================================================
+   ANIMATION UTILITY CLASSES
+   ============================================================ */
+
+.twinkle-slow { animation: twinkle 4.5s ease-in-out infinite; }
+.twinkle-med  { animation: twinkle 2.7s ease-in-out infinite; }
+.twinkle-fast { animation: twinkle 1.7s ease-in-out infinite; }
+
+.castle-light { animation: flicker 2.2s ease-in-out infinite; }
+
+.moon-glow-pulse { animation: moonPulse 5.5s ease-in-out infinite; }
+
+.dragon-fly {
+    animation: dragonFloat 7s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.flag-wave {
+    animation: flagWave 2.8s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: left center;
+}
+
+.gold-glow { animation: goldGlow 4s ease-in-out infinite; }
+
+.slide-down { animation: slideDown 0.22s ease both; }
+
+.active-pulse { animation: activeGlow 2.5s ease-in-out infinite; }
+
+.toast-slide { animation: toastSlideIn 0.28s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* Input / select focus — gold glow */
+input:focus,
+select:focus {
+    border-color: rgba(201, 147, 58, 0.65) !important;
+    box-shadow: 0 0 0 2px rgba(201, 147, 58, 0.13) !important;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }

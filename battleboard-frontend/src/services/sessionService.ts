@@ -29,4 +29,9 @@ export const sessionService = {
     const response = await api.get(`/api/sessions/${sessionId}`);
     return response.data;
   },
+
+  async setActive(sessionId: string, active: boolean) {
+    const response = await api.put(`/api/sessions/${sessionId}`, { isActive: active });
+    return response.data;
+  },
 };
